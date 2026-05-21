@@ -7,26 +7,14 @@ const AI_BASE_URL = (process.env.AI_BASE_URL || "https://openrouter.ai/api/v1")
   .replace(/\/chat\/completions$/, "");
 const AI_CHAT_ENDPOINT = `${AI_BASE_URL}/chat/completions`;
 
-const DEFAULT_EXAM_PATTERN = `
-CRITICAL EXAM PATTERN RULES:
-Whenever the user asks you to generate a question paper, mock exam, or questions for a module, you MUST strictly follow this exact university pattern:
-1. The exam consists of 5 Modules. Each module is worth exactly 20 marks.
-2. In each module, there is an internal choice between TWO full questions (e.g., Q1 OR Q2). The student must answer one full question from each module.
-3. Each full question (e.g., Q1) is subdivided into parts (a, b, c).
-4. The marks for the parts of a single full question MUST sum to exactly 20 marks.
-5. Valid mark distributions for a 20-mark question are typically: (10, 10), (8, 6, 6), (10, 5, 5), or (6, 6, 8). 
-6. Format your mock exams clearly with "OR" separating the internal choices in each module, and indicate the marks for each sub-question.
-`;
-
 async function getExamPattern(supabase: any, examId?: string | null): Promise<string> {
-  let pattern = DEFAULT_EXAM_PATTERN;
   if (examId) {
     const { data: exam } = await supabase.from("exams").select("question_pattern").eq("id", examId).single();
     if (exam?.question_pattern && exam.question_pattern.trim().length > 0) {
-      pattern = `\nCRITICAL EXAM PATTERN RULES:\nWhenever you generate a mock exam, questions, or study plan, strictly follow this pattern provided by the user:\n${exam.question_pattern}\n`;
+      return `\nCRITICAL EXAM PATTERN RULES:\nWhenever you generate a mock exam, questions, or study plan, strictly follow this pattern provided by the user:\n${exam.question_pattern}\n`;
     }
   }
-  return pattern;
+  return "";
 }
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
