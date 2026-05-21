@@ -118,7 +118,7 @@ function GeneralChat() {
   }, [threads, activeThreadId]);
 
   // Fetch messages for active thread
-  const { data: messages = [] } = useQuery({
+  const { data: messages = [], isPending: messagesPending } = useQuery({
     queryKey: ["thread-messages", activeThreadId],
     queryFn: async () => {
       if (!activeThreadId) return [];
@@ -375,6 +375,10 @@ function GeneralChat() {
                   <Plus className="mr-2 h-4 w-4" /> New Chat
                 </Button>
               </div>
+            </div>
+          ) : messagesPending ? (
+            <div className="flex h-full items-center justify-center p-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
             </div>
           ) : !messages.length && !sendMessage.isPending ? (
             /* ── Empty thread — suggestions ── */

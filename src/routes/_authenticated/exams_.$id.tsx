@@ -106,7 +106,7 @@ function ExamChatPage() {
   }, [threads, activeThreadId]);
 
   // Fetch messages for active thread
-  const { data: messages = [] } = useQuery({
+  const { data: messages = [], isPending: messagesPending } = useQuery({
     queryKey: ["thread-messages", activeThreadId],
     queryFn: async () => {
       if (!activeThreadId) return [];
@@ -347,6 +347,10 @@ function ExamChatPage() {
               <Button onClick={() => createThread.mutate()} className="mt-4" size="sm">
                 <Plus className="mr-2 h-4 w-4" /> Start a Chat
               </Button>
+            </div>
+          ) : messagesPending ? (
+            <div className="flex h-full items-center justify-center p-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
             </div>
           ) : !messages.length && !sendMessage.isPending ? (
             <div className="mx-auto max-w-md rounded-2xl border bg-card p-8 text-center mt-12">
