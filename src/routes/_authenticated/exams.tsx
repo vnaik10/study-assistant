@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { markdownComponents } from "@/components/ui/markdown";
 import {
   Plus,
   Trash2,
@@ -18,6 +19,9 @@ import {
   ChevronUp,
   MessageSquare,
   X,
+  Check,
+  Copy,
+  Code2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -701,19 +705,7 @@ function ExamsPage() {
             <div className="prose prose-sm max-w-none dark:prose-invert">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                components={{
-                  table: ({ ...props }) => (
-                    <div className="overflow-x-auto w-full my-6 rounded-lg border bg-card/50">
-                      <table className="w-full m-0 text-sm" {...props} />
-                    </div>
-                  ),
-                  th: ({ ...props }) => (
-                    <th className="border-b bg-muted/50 px-4 py-3 text-left font-medium whitespace-nowrap" {...props} />
-                  ),
-                  td: ({ ...props }) => (
-                    <td className="border-b px-4 py-3" {...props} />
-                  ),
-                }}
+                components={markdownComponents}
               >
                 {planOf.study_plan}
               </ReactMarkdown>
