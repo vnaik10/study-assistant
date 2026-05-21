@@ -5,6 +5,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -118,9 +119,28 @@ function AuthSync() {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthSync />
+      {isNavigating && (
+        <div className="fixed top-0 left-0 right-0 z-[100] h-1 bg-primary/20 overflow-hidden">
+          <div
+            className="h-full bg-primary"
+            style={{
+              width: "50%",
+              animation: "route-progress 1.5s infinite linear",
+            }}
+          />
+          <style>{`
+            @keyframes route-progress {
+              0% { transform: translateX(-100%); width: 50%; }
+              100% { transform: translateX(200%); width: 50%; }
+            }
+          `}</style>
+        </div>
+      )}
       <Outlet />
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
