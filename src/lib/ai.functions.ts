@@ -299,7 +299,7 @@ async function getExamPattern(supabase: any, examId?: string | null): Promise<st
   
   const { data: exam } = await supabase
     .from("exams")
-    .select("question_pattern, subject, total_marks, duration_hours, module_count")
+    .select("question_pattern, subject")
     .eq("id", examId)
     .single();
     
@@ -313,9 +313,6 @@ async function getExamPattern(supabase: any, examId?: string | null): Promise<st
   
   // Inject structural metadata if available
   if (exam.subject) pattern += `Subject: ${exam.subject}\n`;
-  if (exam.total_marks) pattern += `Total Marks: ${exam.total_marks}\n`;
-  if (exam.duration_hours) pattern += `Duration: ${exam.duration_hours} hours\n`;
-  if (exam.module_count) pattern += `Modules: ${exam.module_count}\n`;
   
   if (pattern) {
     pattern += `\n⚠️ COMPLIANCE MANDATE: You MUST strictly adhere to the above pattern. Any deviation is unacceptable.\n`;
@@ -518,11 +515,15 @@ export const generateStudyPlan = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ examId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const { data: exam } = await supabase
+    const { data: exam, error } = await supabase
       .from("exams")
-      .select("subject, exam_date, priority, notes, question_pattern, total_marks, duration_hours, module_count")
+      .select("subject, exam_date, priority, notes, question_pattern")
       .eq("id", data.examId)
       .single();
+    if (error) {
+      console.error("[generateStudyPlan] DB Error:", error);
+      throw new Error(`DB Error: ${error.message}`);
+    }
     if (!exam) throw new Error("Exam not found");
 
     const examPattern = await getExamPattern(supabase, data.examId);
@@ -537,8 +538,6 @@ export const generateStudyPlan = createServerFn({ method: "POST" })
 - Days Remaining: ${days}
 - Priority: ${exam.priority}
 - Student Notes: ${exam.notes || "(none)"}
-- Total Marks: ${exam.total_marks || "100"}
-- Duration: ${exam.duration_hours || "3"} hours
 ${examPattern}
 
 ## FEW-SHOT EXAMPLE OF CORRECT PHASE
@@ -729,7 +728,7 @@ export const chatInThread = createServerFn({ method: "POST" })
       const examsList = exams
         .map((e) => `- **${e.subject}** on ${new Date(e.exam_date).toLocaleDateString()} (Priority: ${e.priority}, ID: ${e.id})`)
         .join("\n");
-      systemPrompt += `\n\n## UPCOMING EXAMS:\n${examsList}\n\n## CRITICAL ISOLATION RULES:\n1. You do NOT have access to uploaded PDFs/notes in this General tab\n2. For subject-specific questions, you MUST NOT answer using outside knowledge\n3. Instead, say: "I don't have access to your uploaded PDFs in this General Assistant tab. Please navigate to the Study Space for that exam."\n4. Then provide: [Open Study Space](/exams/EXAM_ID) — replace EXAM_ID with the exact ID from the schedule above\n5. You MAY discuss scheduling, prioritization, and general study strategies`;
+      systemPrompt += `\n\n## UPCOMING EXAMS:\n${examsList}\n\n## CRITICAL ISOLATION RULES:\n1. You do NOT have access to uploaded PDFs/notes in this General tab\n2. For subject-specific questions (e.g., asking for Biology notes or topics), you MUST NOT answer using outside knowledge\n3. Instead, politely explain you don't have access in this General Assistant tab and redirect them to the specific Study Space.\n4. You MUST provide the redirection link exactly in this format: [Open Subject Name Study Space](/exams/EXAM_ID) — replace "Subject Name" with the actual subject and EXAM_ID with the exact ID from the schedule above.\n5. You MAY discuss scheduling, prioritization, and general study strategies`;
     }
 
     const { data: history } = await supabase

@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { Copy, Check, Code2, Sparkles } from "lucide-react";
+import { Copy, Check, Code2, Sparkles, ArrowRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 
 /* ─────────────────────────────────────────────
    CodeBlock — fenced code with copy button
@@ -156,13 +157,25 @@ export const markdownComponents = {
   a: ({ children, href, ...props }: any) => {
     if (href?.startsWith("/exams/")) {
       return (
-        <a
-          href={href}
-          className="mt-3 mb-1 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 shadow-sm transition-all"
+        <Link
+          to={href}
+          className="group mt-4 mb-2 flex w-full max-w-sm items-center justify-between rounded-xl border border-primary/20 bg-gradient-to-r from-primary/10 to-transparent px-5 py-4 transition-all hover:border-primary/40 hover:bg-primary/5"
         >
-          <Sparkles className="h-4 w-4" />
-          {children}
-        </a>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary shadow-inner">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-display font-semibold text-foreground">
+                {children}
+              </span>
+              <span className="text-xs text-muted-foreground mt-0.5">
+                Click to open study space
+              </span>
+            </div>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+        </Link>
       );
     }
     return (
