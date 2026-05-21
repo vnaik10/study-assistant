@@ -1,5 +1,4 @@
-
-enhanced_code = '''import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -18,7 +17,7 @@ function estimateTokens(text: string): number {
   const clean = text.trim();
   if (!clean) return 0;
   // Weighted: code/math heavier, prose lighter
-  const codeHeaviness = (clean.match(/[{}[\\];=+\-*/<>]/g) || []).length / clean.length;
+  const codeHeaviness = (clean.match(/[{}[\];=+\-*\/<>]/g) || []).length / clean.length;
   const ratio = 3.5 + codeHeaviness * 1.5; // 3.5 to 5.0 chars per token
   return Math.ceil(clean.length / ratio);
 }
@@ -29,7 +28,7 @@ function sliceByTokens(text: string, maxTokens: number, reserveOutput = 1500): s
   if (estimateTokens(text) <= availableInput) return text;
   
   // Slice at paragraph boundaries, not mid-sentence
-  const paragraphs = text.split(/\\n\\s*\\n/);
+  const paragraphs = text.split(/\n\s*\n/);
   let result = "";
   let tokens = 0;
   
@@ -46,11 +45,11 @@ function sliceByTokens(text: string, maxTokens: number, reserveOutput = 1500): s
       }
       break;
     }
-    result += para + "\\n\\n";
+    result += para + "\n\n";
     tokens += paraTokens;
   }
   
-  return result.trim() + (text.length > result.length ? "\\n\\n[Content truncated for context window]" : "");
+  return result.trim() + (text.length > result.length ? "\n\n[Content truncated for context window]" : "");
 }
 
 /** Get model-specific max context */
@@ -137,38 +136,38 @@ const TASK_VALIDATIONS: Record<string, ValidationRule[]> = {
   mock_exam: [
     {
       name: "has_module_structure",
-      test: (c) => /module\\s*\\d|Q\\d\\s*\\(.*?\\d+\\s*marks/i.test(c),
+      test: (c) => /module\s*\d|Q\d\s*\(.*?\d+\s*marks/i.test(c),
       fixPrompt: "Your previous response was missing the required module/question structure. Ensure the mock exam has clear Q1-Q6 structure with marks and internal choice indicators (OR / alternative questions)."
     },
     {
       name: "has_marks_distribution",
-      test: (c) => /(20\\s*marks|100\\s*marks|\\d+\\s*Marks)/i.test(c),
+      test: (c) => /(20\s*marks|100\s*marks|\d+\s*Marks)/i.test(c),
       fixPrompt: "Add clear marks distribution. Each module should be 20 marks, total 100 marks."
     }
   ],
   study_plan: [
     {
       name: "has_phases",
-      test: (c) => /phase\\s*\\d|phase\s*1/i.test(c),
+      test: (c) => /phase\s*\d|phase\s*1/i.test(c),
       fixPrompt: "The study plan MUST have Phase 1, Phase 2, and Phase 3 blocks. Add these clearly."
     },
     {
       name: "has_daily_structure",
-      test: (c) => /hour\\s*\\d|time\\s*block|daily\\s*structure/i.test(c),
+      test: (c) => /hour\s*\d|time\s*block|daily\s*structure/i.test(c),
       fixPrompt: "Include specific hourly time blocks in each phase (e.g., Hour 1-2, Hour 3-4)."
     }
   ],
   quiz: [
     {
       name: "has_options",
-      test: (c) => /[A-D][).]\\s|Option\\s*[A-D]/i.test(c),
+      test: (c) => /[A-D][).]\s|Option\s*[A-D]/i.test(c),
       fixPrompt: "Each question MUST have 4 options labeled A, B, C, D with the correct answer clearly marked."
     }
   ],
   flashcards: [
     {
       name: "has_qa_pairs",
-      test: (c) => /Q:\\s|Question:|A:\\s|Answer:/i.test(c),
+      test: (c) => /Q:\s|Question:|A:\s|Answer:/i.test(c),
       fixPrompt: "Format each flashcard as 'Q: ... / A: ...' pairs."
     }
   ]
@@ -259,7 +258,7 @@ async function callDeepSeek(
       }
 
       // Post-process: remove thinking tags if model outputs reasoning
-      content = content.replace(/<think>[\\s\\S]*?<\\/think>/g, "").trim();
+      content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
       // Validate structured outputs
       if (taskType && TASK_VALIDATIONS[taskType]) {
@@ -272,7 +271,7 @@ async function callDeepSeek(
               const fixMessages: Msg[] = [
                 ...messages,
                 { role: "assistant", content },
-                { role: "user", content: `CRITICAL FORMAT ERROR: ${rule.fixPrompt}\\n\\nPlease regenerate the ENTIRE response with the correct format.` }
+                { role: "user", content: `CRITICAL FORMAT ERROR: ${rule.fixPrompt}\n\nPlease regenerate the ENTIRE response with the correct format.` }
               ];
               return callDeepSeek(fixMessages, temperature * 0.9, taskType, maxRetries - 1);
             }
@@ -309,17 +308,17 @@ async function getExamPattern(supabase: any, examId?: string | null): Promise<st
   let pattern = "";
   
   if (exam.question_pattern?.trim()) {
-    pattern += `\\n## CRITICAL EXAM PATTERN RULES:\\n${exam.question_pattern}\\n`;
+    pattern += `\n## CRITICAL EXAM PATTERN RULES:\n${exam.question_pattern}\n`;
   }
   
   // Inject structural metadata if available
-  if (exam.subject) pattern += `Subject: ${exam.subject}\\n`;
-  if (exam.total_marks) pattern += `Total Marks: ${exam.total_marks}\\n`;
-  if (exam.duration_hours) pattern += `Duration: ${exam.duration_hours} hours\\n`;
-  if (exam.module_count) pattern += `Modules: ${exam.module_count}\\n`;
+  if (exam.subject) pattern += `Subject: ${exam.subject}\n`;
+  if (exam.total_marks) pattern += `Total Marks: ${exam.total_marks}\n`;
+  if (exam.duration_hours) pattern += `Duration: ${exam.duration_hours} hours\n`;
+  if (exam.module_count) pattern += `Modules: ${exam.module_count}\n`;
   
   if (pattern) {
-    pattern += `\\n⚠️ COMPLIANCE MANDATE: You MUST strictly adhere to the above pattern. Any deviation is unacceptable.\\n`;
+    pattern += `\n⚠️ COMPLIANCE MANDATE: You MUST strictly adhere to the above pattern. Any deviation is unacceptable.\n`;
   }
   
   return pattern;
@@ -364,48 +363,48 @@ export const runDocTask = createServerFn({ method: "POST" })
 
     const promptConfigs: Record<typeof data.task, { system: string; user: string; temp: number }> = {
       summary: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n\\nWrite a comprehensive yet accessible summary. Structure with clear headings, bullet points, and bold key terms. Include a 3-sentence elevator pitch at the top.`,
-        user: `Write a clear, structured summary of this study material.\\n\\nTITLE: ${doc.title}\\n\\nMATERIAL:\\n${content}`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n\nWrite a comprehensive yet accessible summary. Structure with clear headings, bullet points, and bold key terms. Include a 3-sentence elevator pitch at the top.`,
+        user: `Write a clear, structured summary of this study material.\n\nTITLE: ${doc.title}\n\nMATERIAL:\n${content}`,
         temp: 0.4
       },
       short_notes: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n\\nConvert material into ultra-concise exam notes. Use bullet points, bold key terms, and tables for comparisons. One page max.`,
-        user: `Create concise short notes from this material.\\n\\nTITLE: ${doc.title}\\n\\nMATERIAL:\\n${content}`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n\nConvert material into ultra-concise exam notes. Use bullet points, bold key terms, and tables for comparisons. One page max.`,
+        user: `Create concise short notes from this material.\n\nTITLE: ${doc.title}\n\nMATERIAL:\n${content}`,
         temp: 0.3
       },
       revision_notes: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n\\nCreate exam-ready revision notes. Include: key concepts, definitions, formulas, common exam traps, and '⚠️ Remember' tips.`,
-        user: `Create revision notes for this material.\\n\\nTITLE: ${doc.title}\\n\\nMATERIAL:\\n${content}`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n\nCreate exam-ready revision notes. Include: key concepts, definitions, formulas, common exam traps, and '⚠️ Remember' tips.`,
+        user: `Create revision notes for this material.\n\nTITLE: ${doc.title}\n\nMATERIAL:\n${content}`,
         temp: 0.3
       },
       quiz: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n\\nGenerate exactly 8 MCQs with 4 options each (A-D). Mark correct answer as **[Correct: X]**. Include brief explanation after each answer.`,
-        user: `Generate 8 multiple-choice questions testing understanding of this material.\\n\\nTITLE: ${doc.title}\\n\\nMATERIAL:\\n${content}\\n\\nFORMAT:\\n1. [Question]?\\nA) [Option]\\nB) [Option]\\nC) [Option]\\nD) [Option]\\n**[Correct: X]**\\n*Explanation: [Why this is correct based on material]*`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n\nGenerate exactly 8 MCQs with 4 options each (A-D). Mark correct answer as **[Correct: X]**. Include brief explanation after each answer.`,
+        user: `Generate 8 multiple-choice questions testing understanding of this material.\n\nTITLE: ${doc.title}\n\nMATERIAL:\n${content}\n\nFORMAT:\n1. [Question]?\nA) [Option]\nB) [Option]\nC) [Option]\nD) [Option]\n**[Correct: X]**\n*Explanation: [Why this is correct based on material]*`,
         temp: 0.5
       },
       flashcards: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n\\nGenerate exactly 10 flashcards. Format strictly as: Q: [Question]? / A: [Answer]. Ensure answers are concise (1-2 sentences).`,
-        user: `Generate 10 flashcards covering the most important concepts.\\n\\nTITLE: ${doc.title}\\n\\nMATERIAL:\\n${content}`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n\nGenerate exactly 10 flashcards. Format strictly as: Q: [Question]? / A: [Answer]. Ensure answers are concise (1-2 sentences).`,
+        user: `Generate 10 flashcards covering the most important concepts.\n\nTITLE: ${doc.title}\n\nMATERIAL:\n${content}`,
         temp: 0.4
       },
       mindmap: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n\\nProduce a hierarchical markdown outline using nested bullets (━, ┣, ┗). Show topic hierarchy clearly.`,
-        user: `Create a mind-map outline of this material.\\n\\nTITLE: ${doc.title}\\n\\nMATERIAL:\\n${content}`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n\nProduce a hierarchical markdown outline using nested bullets (━, ┣, ┗). Show topic hierarchy clearly.`,
+        user: `Create a mind-map outline of this material.\n\nTITLE: ${doc.title}\n\nMATERIAL:\n${content}`,
         temp: 0.3
       },
       important_topics: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n\\nList exactly 8 topics ranked by exam relevance. Format: **1. [Topic]** — [Justification with citation to material].`,
-        user: `List the 8 most important topics in this material for exam preparation.\\n\\nTITLE: ${doc.title}\\n\\nMATERIAL:\\n${content}`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n\nList exactly 8 topics ranked by exam relevance. Format: **1. [Topic]** — [Justification with citation to material].`,
+        user: `List the 8 most important topics in this material for exam preparation.\n\nTITLE: ${doc.title}\n\nMATERIAL:\n${content}`,
         temp: 0.3
       },
       viva: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n\\nGenerate 10 viva questions of increasing difficulty (Easy→Medium→Hard). Include 2-line ideal answers.`,
-        user: `Generate 10 viva/oral exam questions with ideal answers.\\n\\nTITLE: ${doc.title}\\n\\nMATERIAL:\\n${content}`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n\nGenerate 10 viva questions of increasing difficulty (Easy→Medium→Hard). Include 2-line ideal answers.`,
+        user: `Generate 10 viva/oral exam questions with ideal answers.\n\nTITLE: ${doc.title}\n\nMATERIAL:\n${content}`,
         temp: 0.4
       },
       mock_exam: {
-        system: `${BASE_SYSTEM_CONSTRAINTS}\\n${EXAM_PATTERN_CONSTRAINTS}\\n\\n${FEW_SHOT_MOCK_EXAM}\\n\\nGenerate a FULL mock exam based ONLY on the provided material. You MUST follow the exact exam pattern specified.`,
-        user: `Generate a complete Mock Exam based ONLY on this material.\\n\\nTITLE: ${doc.title}\\n${examPattern}\\n\\nMATERIAL:\\n${content}\\n\\nREQUIREMENTS:\\n- Match the exact module/marks structure from the pattern above\\n- Include internal choice indicators (OR / alternative questions)\\n- Total must equal the specified marks\\n- Questions must be answerable from the material only`,
+        system: `${BASE_SYSTEM_CONSTRAINTS}\n${EXAM_PATTERN_CONSTRAINTS}\n\n${FEW_SHOT_MOCK_EXAM}\n\nGenerate a FULL mock exam based ONLY on the provided material. You MUST follow the exact exam pattern specified.`,
+        user: `Generate a complete Mock Exam based ONLY on this material.\n\nTITLE: ${doc.title}\n${examPattern}\n\nMATERIAL:\n${content}\n\nREQUIREMENTS:\n- Match the exact module/marks structure from the pattern above\n- Include internal choice indicators (OR / alternative questions)\n- Total must equal the specified marks\n- Questions must be answerable from the material only`,
         temp: 0.6
       },
     };
@@ -441,7 +440,7 @@ export const chatWithDoc = createServerFn({ method: "POST" })
 
     let contextText = "";
     let docTitle = "";
-    let systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\\n\\nYou are a helpful study tutor. Answer concisely but thoroughly. When referencing material, cite [Source: Document].`;
+    let systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n\nYou are a helpful study tutor. Answer concisely but thoroughly. When referencing material, cite [Source: Document].`;
 
     if (data.documentId) {
       const { data: doc } = await supabase
@@ -453,7 +452,7 @@ export const chatWithDoc = createServerFn({ method: "POST" })
         docTitle = doc.title;
         contextText = sliceByTokens(doc.content, maxContext * 0.45, 2500);
         const examPattern = await getExamPattern(supabase, doc.exam_id);
-        systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\\n${examPattern}\\n\\n## MATERIAL CONTEXT:\\n${contextText}\\n\\n## INSTRUCTIONS:\\n- Answer using ONLY the material above\\n- Cite specific sections when possible: [Source: ${doc.title}, Section X]\\n- If unsure, say: "I can only answer based on the provided document, and this information is not present."\\n- Keep answers under 300 words unless the question requires detail`;
+        systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n${examPattern}\n\n## MATERIAL CONTEXT:\n${contextText}\n\n## INSTRUCTIONS:\n- Answer using ONLY the material above\n- Cite specific sections when possible: [Source: ${doc.title}, Section X]\n- If unsure, say: "I can only answer based on the provided document, and this information is not present."\n- Keep answers under 300 words unless the question requires detail`;
       }
     } else {
       // General chat: inject upcoming exams as context
@@ -466,8 +465,8 @@ export const chatWithDoc = createServerFn({ method: "POST" })
       if (exams && exams.length > 0) {
         const examsList = exams
           .map((e) => `- **${e.subject}** on ${new Date(e.exam_date).toLocaleDateString()} (Priority: ${e.priority})`)
-          .join("\\n");
-        systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\\n\\nYou are a study planner. You may ONLY discuss the user's upcoming exams. No outside knowledge.\\n\\nEXAM SCHEDULE:\\n${examsList}\\n\\nIf asked about subjects not in this schedule, say: "I can only discuss your scheduled exams. Please upload documents for subject-specific questions."`;
+          .join("\n");
+        systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n\nYou are a study planner. You may ONLY discuss the user's upcoming exams. No outside knowledge.\n\nEXAM SCHEDULE:\n${examsList}\n\nIf asked about subjects not in this schedule, say: "I can only discuss your scheduled exams. Please upload documents for subject-specific questions."`;
       }
     }
 
@@ -666,7 +665,7 @@ export const chatInExamSpace = createServerFn({ method: "POST" })
     if (docs && docs.length > 0) {
       for (const doc of docs) {
         const sliced = sliceByTokens(doc.content, budgetPerDoc, 500);
-        materialContext += `\\n--- Document: ${doc.title} ---\\n${sliced}\\n`;
+        materialContext += `\n--- Document: ${doc.title} ---\n${sliced}\n`;
         usedTokens += estimateTokens(sliced);
         if (usedTokens > maxContext * 0.45) break; // Hard cap
       }
@@ -674,7 +673,7 @@ export const chatInExamSpace = createServerFn({ method: "POST" })
 
     let systemPrompt: string;
     if (materialContext) {
-      systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\\n${examPattern}\\n\\n## AVAILABLE MATERIALS FOR ${examSubject}:\\n${materialContext}\\n\\n## CRITICAL RULES:\\n1. You have access to ${docs?.length || 0} documents above\\n2. Cite which document you used: [Source: Document Title]\\n3. If information spans multiple docs, cite all relevant ones\\n4. If answer not in materials: "I can only answer based on the uploaded documents for ${examSubject}, and this information is not present."\\n5. Be concise but complete. Use markdown formatting.`;
+      systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n${examPattern}\n\n## AVAILABLE MATERIALS FOR ${examSubject}:\n${materialContext}\n\n## CRITICAL RULES:\n1. You have access to ${docs?.length || 0} documents above\n2. Cite which document you used: [Source: Document Title]\n3. If information spans multiple docs, cite all relevant ones\n4. If answer not in materials: "I can only answer based on the uploaded documents for ${examSubject}, and this information is not present."\n5. Be concise but complete. Use markdown formatting.`;
     } else {
       systemPrompt = `You are a study tutor for ${examSubject}. The student has not uploaded any documents yet. Politely inform them they need to upload notes, PDFs, or question papers before you can help. Do not answer academic questions without materials.`;
     }
@@ -724,13 +723,13 @@ export const chatInThread = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .order("exam_date", { ascending: true });
 
-    let systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\\n\\nYou are a professional AI Study Assistant and Planner.`;
+    let systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n\nYou are a professional AI Study Assistant and Planner.`;
     
     if (exams && exams.length > 0) {
       const examsList = exams
         .map((e) => `- **${e.subject}** on ${new Date(e.exam_date).toLocaleDateString()} (Priority: ${e.priority}, ID: ${e.id})`)
-        .join("\\n");
-      systemPrompt += `\\n\\n## UPCOMING EXAMS:\\n${examsList}\\n\\n## CRITICAL ISOLATION RULES:\\n1. You do NOT have access to uploaded PDFs/notes in this General tab\\n2. For subject-specific questions, you MUST NOT answer using outside knowledge\\n3. Instead, say: "I don't have access to your uploaded PDFs in this General Assistant tab. Please navigate to the Study Space for that exam."\\n4. Then provide: [Open Study Space](/exams/EXAM_ID) — replace EXAM_ID with the exact ID from the schedule above\\n5. You MAY discuss scheduling, prioritization, and general study strategies`;
+        .join("\n");
+      systemPrompt += `\n\n## UPCOMING EXAMS:\n${examsList}\n\n## CRITICAL ISOLATION RULES:\n1. You do NOT have access to uploaded PDFs/notes in this General tab\n2. For subject-specific questions, you MUST NOT answer using outside knowledge\n3. Instead, say: "I don't have access to your uploaded PDFs in this General Assistant tab. Please navigate to the Study Space for that exam."\n4. Then provide: [Open Study Space](/exams/EXAM_ID) — replace EXAM_ID with the exact ID from the schedule above\n5. You MAY discuss scheduling, prioritization, and general study strategies`;
     }
 
     const { data: history } = await supabase
@@ -775,7 +774,7 @@ export const generateThreadTitle = createServerFn({ method: "POST" })
       [
         {
           role: "system",
-          content: `Generate a concise chat title (3-5 words) that captures the academic topic.\\nRules:\\n- NO quotes, NO punctuation at end\\n- Prefer: "Calculus Integration", "Exam Strategy", "Cloud Computing Module 3"\\n- Avoid: "Discussion about...", "Question regarding..."\\n- Reply with ONLY the title text`,
+          content: `Generate a concise chat title (3-5 words) that captures the academic topic.\nRules:\n- NO quotes, NO punctuation at end\n- Prefer: "Calculus Integration", "Exam Strategy", "Cloud Computing Module 3"\n- Avoid: "Discussion about...", "Question regarding..."\n- Reply with ONLY the title text`,
         },
         { role: "user", content: data.firstMessage },
       ],
@@ -881,11 +880,11 @@ export const formatNoteWithAI = createServerFn({ method: "POST" })
 - Make it scannable — quick topic lookup should be easy
 
 ## OUTPUT VALIDATION:
-Before finishing, verify:\n- At least 2 heading levels present\\n- Key terms are bolded\\n- Has a Key Takeaways section\\n- No raw HTML tags`,
+Before finishing, verify:\n- At least 2 heading levels present\n- Key terms are bolded\n- Has a Key Takeaways section\n- No raw HTML tags`,
         },
         {
           role: "user",
-          content: `Format these study notes into clean, professional, exam-ready markdown:\\n\\n${content}`,
+          content: `Format these study notes into clean, professional, exam-ready markdown:\n\n${content}`,
         },
       ],
       0.3,
@@ -893,7 +892,7 @@ Before finishing, verify:\n- At least 2 heading levels present\\n- Key terms are
     );
 
     // Extract title from formatted content
-    const titleMatch = formatted.match(/^#\\s+(.+)$/m);
+    const titleMatch = formatted.match(/^#\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : doc.title;
 
     const { error: updateError } = await supabase
@@ -944,11 +943,3 @@ ${sliceByTokens(data.text, 12000, 2000)}`;
 
     return { pattern };
   });
-'''
-
-# Save to output
-with open('/mnt/agents/output/enhanced_ai_server.ts', 'w', encoding='utf-8') as f:
-    f.write(enhanced_code)
-
-print("Enhanced code saved successfully!")
-print(f"Total lines: {len(enhanced_code.splitlines())}")

@@ -210,8 +210,6 @@ function ExamChatPage() {
     ? Math.ceil((new Date(exam.exam_date).getTime() - Date.now()) / 86_400_000)
     : 0;
 
-  return (
-    <div className="flex h-full">
   const sidebarContent = (
     <>
       {/* Sidebar Header */}
