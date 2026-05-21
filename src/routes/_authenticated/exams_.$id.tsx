@@ -344,7 +344,7 @@ function ExamChatPage() {
               </p>
             </div>
           ) : (
-            <div className="mx-auto max-w-3xl space-y-4">
+            <div className="mx-auto max-w-4xl space-y-4">
               {messages.map((m) => (
                 <div
                   key={m.id}
@@ -441,7 +441,7 @@ function ExamChatPage() {
         {/* Input Area */}
         {activeThreadId && (
           <div className="border-t bg-card p-4">
-            <div className="mx-auto flex max-w-3xl gap-2">
+            <div className="mx-auto flex max-w-4xl gap-2">
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}

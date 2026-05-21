@@ -389,7 +389,7 @@ function GeneralChat() {
             </div>
           ) : (
             /* ── Message list ── */
-            <div className="mx-auto max-w-3xl space-y-1 px-4 py-6 md:px-6">
+            <div className="mx-auto max-w-4xl space-y-1 px-4 py-6 md:px-6">
               {messages.map((m, idx) => (
                 <div
                   key={m.id}
@@ -510,7 +510,7 @@ function GeneralChat() {
         {/* ── Input Area ── */}
         {activeThreadId && (
           <div className="border-t bg-gradient-to-t from-background to-background/80 p-4 backdrop-blur-sm">
-            <div className="chat-input-glow mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-card/90 p-2 shadow-sm backdrop-blur-sm">
+            <div className="chat-input-glow mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border bg-card/90 p-2 shadow-sm backdrop-blur-sm">
               <Textarea
                 ref={textareaRef}
                 value={input}

@@ -131,7 +131,7 @@ function DocChat() {
                 </p>
               </div>
             )}
-            <div className="mx-auto max-w-3xl space-y-4">
+            <div className="mx-auto max-w-4xl space-y-4">
               {messages.map((m) => (
                 <div
                   key={m.id}
@@ -168,7 +168,7 @@ function DocChat() {
             </div>
           </div>
           <div className="border-t bg-card p-4">
-            <div className="mx-auto flex max-w-3xl gap-2">
+            <div className="mx-auto flex max-w-4xl gap-2">
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -191,7 +191,7 @@ function DocChat() {
 
         {/* Task output panel */}
         {taskOutput && (
-          <aside className="hidden w-[420px] flex-shrink-0 overflow-y-auto border-l bg-muted/20 p-6 lg:block">
+          <aside className="hidden w-[480px] flex-shrink-0 overflow-y-auto border-l bg-muted/20 p-6 lg:block">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display text-lg font-semibold capitalize">
                 {taskOutput.task.replace("_", " ")}
