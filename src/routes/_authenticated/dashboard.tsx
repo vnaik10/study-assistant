@@ -83,7 +83,20 @@ function Dashboard() {
   })();
 
   const totalMinutes = sessions?.reduce((a, s) => a + s.minutes, 0) ?? 0;
-  const name = user?.email?.split("@")[0] ?? "student";
+  let name = "Student";
+  if (user?.user_metadata?.full_name || user?.user_metadata?.display_name) {
+    name = user.user_metadata.full_name || user.user_metadata.display_name;
+    // Extract first name
+    name = name.split(" ")[0];
+  } else if (user?.email) {
+    const prefix = user.email.split("@")[0];
+    const cleaned = prefix.replace(/[0-9]/g, ""); // remove numbers
+    if (cleaned) {
+      name = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    } else {
+      name = prefix;
+    }
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 p-6 md:p-10">

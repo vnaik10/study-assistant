@@ -127,15 +127,6 @@ function ExamForm({
         <input type="hidden" name="priority" value={priority} />
       </div>
       <div>
-        <Label htmlFor="exam-notes">Notes / topics</Label>
-        <Textarea
-          id="exam-notes"
-          name="notes"
-          placeholder="Chapters, topics, weak areas..."
-          defaultValue={defaultValues?.notes ?? ""}
-        />
-      </div>
-      <div>
         <Label htmlFor="exam-question-pattern">Question Paper Pattern (Optional)</Label>
         <Textarea
           id="exam-question-pattern"
