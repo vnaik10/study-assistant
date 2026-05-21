@@ -105,19 +105,172 @@
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-feature-settings: "ss01", "cv11";
   }
-  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
 }
 
 @layer components {
-  .text-gold { color: var(--gold); }
-  .bg-gold { background-color: var(--gold); color: var(--gold-foreground); }
-  .gradient-hero { background: var(--gradient-hero); }
-  .gradient-gold { background: var(--gradient-gold); }
-  .shadow-elegant { box-shadow: var(--shadow-elegant); }
+  .text-gold {
+    color: var(--gold);
+  }
+  .bg-gold {
+    background-color: var(--gold);
+    color: var(--gold-foreground);
+  }
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .gradient-gold {
+    background: var(--gradient-gold);
+  }
+  .shadow-elegant {
+    box-shadow: var(--shadow-elegant);
+  }
+
+  /* ── Chat Enhancement Styles ── */
+
+  /* Message fade-in + slide-up entrance */
+  .chat-message-enter {
+    animation: chatFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Thinking dots animation */
+  .chat-dot-pulse span {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted-foreground);
+    animation: dotPulse 1.4s infinite ease-in-out both;
+  }
+  .chat-dot-pulse span:nth-child(1) { animation-delay: 0s; }
+  .chat-dot-pulse span:nth-child(2) { animation-delay: 0.16s; }
+  .chat-dot-pulse span:nth-child(3) { animation-delay: 0.32s; }
+
+  /* Shimmer sweep for thinking label */
+  .chat-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--muted-foreground) 0%,
+      var(--foreground) 50%,
+      var(--muted-foreground) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 2s ease-in-out infinite;
+  }
+
+  /* Code block base */
+  .chat-code-block {
+    background: oklch(0.2 0.02 165);
+    border-radius: 0.625rem;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+  }
+  .dark .chat-code-block {
+    background: oklch(0.15 0.02 165);
+  }
+
+  /* Input glow on focus-within */
+  .chat-input-glow {
+    transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+  .chat-input-glow:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px oklch(0.45 0.08 165 / 0.15),
+                0 8px 32px -8px oklch(0.27 0.05 165 / 0.12);
+  }
+  .dark .chat-input-glow:focus-within {
+    box-shadow: 0 0 0 3px oklch(0.72 0.13 85 / 0.2),
+                0 8px 32px -8px oklch(0 0 0 / 0.3);
+  }
+
+  /* Suggestion chips */
+  .chat-suggestion-chip {
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .chat-suggestion-chip:hover {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px oklch(0.36 0.08 165 / 0.2);
+  }
+  .dark .chat-suggestion-chip:hover {
+    box-shadow: 0 4px 12px oklch(0.72 0.13 85 / 0.25);
+  }
+
+  /* Assistant message accent bar */
+  .chat-assistant-accent {
+    position: relative;
+  }
+  .chat-assistant-accent::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.75rem;
+    bottom: 0.75rem;
+    width: 2.5px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--primary), var(--gold));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .chat-assistant-accent:hover::before {
+    opacity: 1;
+  }
+
+  /* Animated sparkle float */
+  .chat-sparkle-float {
+    animation: sparkleFloat 3s ease-in-out infinite;
+  }
+}
+
+/* Keyframes outside @layer so they work everywhere */
+@keyframes chatFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.4);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes sparkleFloat {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(8deg); }
 }

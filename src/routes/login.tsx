@@ -80,23 +80,43 @@ function LoginPage() {
               {mode === "signin" ? "Welcome back" : "Create your account"}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {mode === "signin" ? "Sign in to continue your study journey." : "Start studying smarter today."}
+              {mode === "signin"
+                ? "Sign in to continue your study journey."
+                : "Start studying smarter today."}
             </p>
           </div>
 
           {mode === "signup" && (
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+              />
             </div>
           )}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              id="password"
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>

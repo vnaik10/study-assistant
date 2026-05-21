@@ -1,6 +1,13 @@
-import { createFileRoute, Outlet, redirect, Link, useNavigate, useLocation } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  Link,
+  useNavigate,
+  useLocation,
+} from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Calendar, FileText, MessageSquare, LogOut, Sparkles } from "lucide-react";
+import { LayoutDashboard, Calendar, FileText, MessageSquare, LogOut, Sparkles, Notebook } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -15,8 +22,9 @@ export const Route = createFileRoute("/_authenticated")({
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/exams", label: "Exams", icon: Calendar },
+  { to: "/notes", label: "Notes", icon: Notebook },
   { to: "/documents", label: "Library", icon: FileText },
-  { to: "/chat", label: "AI Tutor", icon: MessageSquare },
+  { to: "/chat", label: "General Assistant", icon: MessageSquare },
 ] as const;
 
 function AuthedLayout() {
@@ -31,7 +39,7 @@ function AuthedLayout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       <aside className="hidden w-64 flex-col gradient-hero p-5 text-sidebar-foreground md:flex">
         <Link to="/dashboard" className="mb-8 flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gold">
@@ -76,11 +84,17 @@ function AuthedLayout() {
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="font-display font-semibold">Scholaria</span>
           </Link>
-          <button onClick={signOut} className="text-sm text-muted-foreground">Sign out</button>
+          <button onClick={signOut} className="text-sm text-muted-foreground">
+            Sign out
+          </button>
         </header>
         <nav className="flex gap-1 overflow-x-auto border-b bg-card px-2 py-2 md:hidden">
           {NAV.map(({ to, label, icon: Icon }) => (
-            <Link key={to} to={to} className="flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs">
+            <Link
+              key={to}
+              to={to}
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs"
+            >
               <Icon className="h-3.5 w-3.5" /> {label}
             </Link>
           ))}

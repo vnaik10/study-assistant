@@ -16,7 +16,10 @@ import { Route as AuthenticatedExamsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
-import { Route as AuthenticatedDocumentsIdRouteImport } from './routes/_authenticated/documents.$id'
+import { Route as AuthenticatedNotesIndexRouteImport } from './routes/_authenticated/notes/index'
+import { Route as AuthenticatedNotesExamIdRouteImport } from './routes/_authenticated/notes/$examId'
+import { Route as AuthenticatedExamsIdRouteImport } from './routes/_authenticated/exams_.$id'
+import { Route as AuthenticatedDocumentsIdRouteImport } from './routes/_authenticated/documents_.$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -52,11 +55,27 @@ const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedNotesIndexRoute = AuthenticatedNotesIndexRouteImport.update({
+  id: '/notes/',
+  path: '/notes/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedNotesExamIdRoute =
+  AuthenticatedNotesExamIdRouteImport.update({
+    id: '/notes/$examId',
+    path: '/notes/$examId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedExamsIdRoute = AuthenticatedExamsIdRouteImport.update({
+  id: '/exams_/$id',
+  path: '/exams/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDocumentsIdRoute =
   AuthenticatedDocumentsIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => AuthenticatedDocumentsRoute,
+    id: '/documents_/$id',
+    path: '/documents/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -64,18 +83,24 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/chat': typeof AuthenticatedChatRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/documents': typeof AuthenticatedDocumentsRouteWithChildren
+  '/documents': typeof AuthenticatedDocumentsRoute
   '/exams': typeof AuthenticatedExamsRoute
   '/documents/$id': typeof AuthenticatedDocumentsIdRoute
+  '/exams/$id': typeof AuthenticatedExamsIdRoute
+  '/notes/$examId': typeof AuthenticatedNotesExamIdRoute
+  '/notes/': typeof AuthenticatedNotesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthenticatedChatRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/documents': typeof AuthenticatedDocumentsRouteWithChildren
+  '/documents': typeof AuthenticatedDocumentsRoute
   '/exams': typeof AuthenticatedExamsRoute
   '/documents/$id': typeof AuthenticatedDocumentsIdRoute
+  '/exams/$id': typeof AuthenticatedExamsIdRoute
+  '/notes/$examId': typeof AuthenticatedNotesExamIdRoute
+  '/notes': typeof AuthenticatedNotesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -84,9 +109,12 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/documents': typeof AuthenticatedDocumentsRouteWithChildren
+  '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
   '/_authenticated/exams': typeof AuthenticatedExamsRoute
-  '/_authenticated/documents/$id': typeof AuthenticatedDocumentsIdRoute
+  '/_authenticated/documents_/$id': typeof AuthenticatedDocumentsIdRoute
+  '/_authenticated/exams_/$id': typeof AuthenticatedExamsIdRoute
+  '/_authenticated/notes/$examId': typeof AuthenticatedNotesExamIdRoute
+  '/_authenticated/notes/': typeof AuthenticatedNotesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -98,6 +126,9 @@ export interface FileRouteTypes {
     | '/documents'
     | '/exams'
     | '/documents/$id'
+    | '/exams/$id'
+    | '/notes/$examId'
+    | '/notes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -107,6 +138,9 @@ export interface FileRouteTypes {
     | '/documents'
     | '/exams'
     | '/documents/$id'
+    | '/exams/$id'
+    | '/notes/$examId'
+    | '/notes'
   id:
     | '__root__'
     | '/'
@@ -116,7 +150,10 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/documents'
     | '/_authenticated/exams'
-    | '/_authenticated/documents/$id'
+    | '/_authenticated/documents_/$id'
+    | '/_authenticated/exams_/$id'
+    | '/_authenticated/notes/$examId'
+    | '/_authenticated/notes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -176,42 +213,57 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChatRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/documents/$id': {
-      id: '/_authenticated/documents/$id'
-      path: '/$id'
+    '/_authenticated/notes/': {
+      id: '/_authenticated/notes/'
+      path: '/notes'
+      fullPath: '/notes/'
+      preLoaderRoute: typeof AuthenticatedNotesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/notes/$examId': {
+      id: '/_authenticated/notes/$examId'
+      path: '/notes/$examId'
+      fullPath: '/notes/$examId'
+      preLoaderRoute: typeof AuthenticatedNotesExamIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/exams_/$id': {
+      id: '/_authenticated/exams_/$id'
+      path: '/exams/$id'
+      fullPath: '/exams/$id'
+      preLoaderRoute: typeof AuthenticatedExamsIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/documents_/$id': {
+      id: '/_authenticated/documents_/$id'
+      path: '/documents/$id'
       fullPath: '/documents/$id'
       preLoaderRoute: typeof AuthenticatedDocumentsIdRouteImport
-      parentRoute: typeof AuthenticatedDocumentsRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
 
-interface AuthenticatedDocumentsRouteChildren {
-  AuthenticatedDocumentsIdRoute: typeof AuthenticatedDocumentsIdRoute
-}
-
-const AuthenticatedDocumentsRouteChildren: AuthenticatedDocumentsRouteChildren =
-  {
-    AuthenticatedDocumentsIdRoute: AuthenticatedDocumentsIdRoute,
-  }
-
-const AuthenticatedDocumentsRouteWithChildren =
-  AuthenticatedDocumentsRoute._addFileChildren(
-    AuthenticatedDocumentsRouteChildren,
-  )
-
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRouteWithChildren
+  AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
   AuthenticatedExamsRoute: typeof AuthenticatedExamsRoute
+  AuthenticatedDocumentsIdRoute: typeof AuthenticatedDocumentsIdRoute
+  AuthenticatedExamsIdRoute: typeof AuthenticatedExamsIdRoute
+  AuthenticatedNotesExamIdRoute: typeof AuthenticatedNotesExamIdRoute
+  AuthenticatedNotesIndexRoute: typeof AuthenticatedNotesIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedDocumentsRoute: AuthenticatedDocumentsRouteWithChildren,
+  AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
   AuthenticatedExamsRoute: AuthenticatedExamsRoute,
+  AuthenticatedDocumentsIdRoute: AuthenticatedDocumentsIdRoute,
+  AuthenticatedExamsIdRoute: AuthenticatedExamsIdRoute,
+  AuthenticatedNotesExamIdRoute: AuthenticatedNotesExamIdRoute,
+  AuthenticatedNotesIndexRoute: AuthenticatedNotesIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

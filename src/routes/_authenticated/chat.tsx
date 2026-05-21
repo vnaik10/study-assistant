@@ -1,108 +1,758 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
-import { Send, Sparkles, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Send,
+  Sparkles,
+  Loader2,
+  Pencil,
+  MessageSquare,
+  X,
+  Copy,
+  Check,
+  Code2,
+  Bot,
+  User,
+  ArrowUp,
+  Lightbulb,
+  BookOpen,
+  Calendar,
+  Target,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { chatWithDoc } from "@/lib/ai.functions";
+import { chatInThread, generateThreadTitle, editAndResend } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   component: GeneralChat,
 });
 
+type Thread = {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type Message = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+};
+
+// Helper for date grouping
+function getDateGroup(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - date.getTime()) / 86400000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  if (diff <= 7) return "Previous 7 Days";
+  return "Older";
+}
+
+/* ─────────────────────────────────────────────
+   CodeBlock — fenced code with copy button
+   ───────────────────────────────────────────── */
+function CodeBlock({ language, children }: { language?: string; children: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(children).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [children]);
+
+  const displayLang = language || "text";
+
+  return (
+    <div className="chat-code-block my-4 border border-border/40">
+      {/* Header bar */}
+      <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-4 py-2">
+        <div className="flex items-center gap-2 text-xs text-white/50">
+          <Code2 className="h-3.5 w-3.5" />
+          <span className="font-mono">{displayLang}</span>
+        </div>
+        <button
+          onClick={copy}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-white/50 transition-all hover:bg-white/10 hover:text-white/80"
+        >
+          {copied ? (
+            <>
+              <Check className="h-3 w-3 text-emerald-400" />
+              <span className="text-emerald-400">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="h-3 w-3" />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      {/* Code content */}
+      <pre className="overflow-x-auto p-4 text-[0.8125rem] leading-relaxed">
+        <code className="font-mono text-white/90">{children}</code>
+      </pre>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Suggestion chips for empty state
+   ───────────────────────────────────────────── */
+const SUGGESTIONS = [
+  { icon: Calendar, label: "What should I study today?" },
+  { icon: Target, label: "Help me prioritize my exams" },
+  { icon: BookOpen, label: "Create a study plan for this week" },
+  { icon: Lightbulb, label: "Tips for better memorization" },
+];
+
+/* ─────────────────────────────────────────────
+   Markdown Components Map
+   ───────────────────────────────────────────── */
+const markdownComponents = {
+  // Code blocks — fenced vs inline
+  code: ({ className, children, ...props }: any) => {
+    const match = /language-(\w+)/.exec(className || "");
+    const content = String(children).replace(/\n$/, "");
+
+    // If it has a language class or contains newlines, treat as block
+    if (match || content.includes("\n")) {
+      return <CodeBlock language={match?.[1]}>{content}</CodeBlock>;
+    }
+
+    // Inline code
+    return (
+      <code
+        className="rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-[0.8125rem] text-primary dark:bg-primary/15"
+        {...props}
+      >
+        {children}
+      </code>
+    );
+  },
+
+  // Headings with display font + accent
+  h1: ({ children, ...props }: any) => (
+    <h1
+      className="mb-4 mt-6 border-l-3 border-primary/60 pl-3 font-display text-xl font-bold tracking-tight first:mt-0"
+      {...props}
+    >
+      {children}
+    </h1>
+  ),
+  h2: ({ children, ...props }: any) => (
+    <h2
+      className="mb-3 mt-5 border-l-3 border-gold/60 pl-3 font-display text-lg font-semibold tracking-tight first:mt-0"
+      {...props}
+    >
+      {children}
+    </h2>
+  ),
+  h3: ({ children, ...props }: any) => (
+    <h3
+      className="mb-2 mt-4 font-display text-base font-semibold tracking-tight first:mt-0"
+      {...props}
+    >
+      {children}
+    </h3>
+  ),
+  h4: ({ children, ...props }: any) => (
+    <h4
+      className="mb-2 mt-3 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground first:mt-0"
+      {...props}
+    >
+      {children}
+    </h4>
+  ),
+
+  // Paragraphs
+  p: ({ children, ...props }: any) => (
+    <p className="mb-3 leading-relaxed last:mb-0" {...props}>
+      {children}
+    </p>
+  ),
+
+  // Lists
+  ul: ({ children, ...props }: any) => (
+    <ul className="mb-3 ml-1 space-y-1.5 last:mb-0" {...props}>
+      {children}
+    </ul>
+  ),
+  ol: ({ children, ...props }: any) => (
+    <ol className="mb-3 ml-1 list-decimal space-y-1.5 pl-4 last:mb-0 marker:text-primary/60 marker:font-semibold" {...props}>
+      {children}
+    </ol>
+  ),
+  li: ({ children, ...props }: any) => {
+    // Check if parent is ul (unordered) — add custom bullet
+    const isOrdered = props.node?.parentNode?.tagName === "ol";
+    return (
+      <li
+        className={`leading-relaxed ${!isOrdered ? "flex items-start gap-2" : ""}`}
+        {...props}
+      >
+        {!isOrdered && (
+          <span className="mt-2 block h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
+        )}
+        <span className="flex-1">{children}</span>
+      </li>
+    );
+  },
+
+  // Blockquotes
+  blockquote: ({ children, ...props }: any) => (
+    <blockquote
+      className="my-4 rounded-r-lg border-l-3 border-primary/40 bg-primary/5 py-2 pl-4 pr-3 text-[0.925rem] italic text-foreground/80 dark:bg-primary/10"
+      {...props}
+    >
+      {children}
+    </blockquote>
+  ),
+
+  // Links
+  a: ({ children, ...props }: any) => (
+    <a
+      className="font-medium text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:decoration-primary/70"
+      target="_blank"
+      rel="noopener noreferrer"
+      {...props}
+    >
+      {children}
+    </a>
+  ),
+
+  // Horizontal rule
+  hr: () => (
+    <div className="my-6 flex items-center gap-3">
+      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent" />
+      <Sparkles className="h-3 w-3 text-primary/30" />
+      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent" />
+    </div>
+  ),
+
+  // Strong / emphasis
+  strong: ({ children, ...props }: any) => (
+    <strong className="font-semibold text-foreground" {...props}>
+      {children}
+    </strong>
+  ),
+
+  // Tables
+  table: ({ ...props }: any) => (
+    <div className="my-5 overflow-x-auto rounded-xl border bg-card/50 shadow-sm">
+      <table className="m-0 w-full text-sm" {...props} />
+    </div>
+  ),
+  thead: ({ ...props }: any) => (
+    <thead className="bg-muted/40" {...props} />
+  ),
+  th: ({ ...props }: any) => (
+    <th
+      className="border-b bg-muted/50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap"
+      {...props}
+    />
+  ),
+  td: ({ ...props }: any) => (
+    <td className="border-b border-border/40 px-4 py-3 transition-colors" {...props} />
+  ),
+  tr: ({ ...props }: any) => (
+    <tr className="transition-colors hover:bg-muted/20" {...props} />
+  ),
+
+  // Pre — wrapper handled by CodeBlock, but just in case
+  pre: ({ children, ...props }: any) => (
+    <div {...props}>{children}</div>
+  ),
+};
+
+/* ─────────────────────────────────────────────
+   Main Component
+   ───────────────────────────────────────────── */
 function GeneralChat() {
   const qc = useQueryClient();
-  const chat = useServerFn(chatWithDoc);
-  const [input, setInput] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const chatFn = useServerFn(chatInThread);
+  const titleFn = useServerFn(generateThreadTitle);
+  const editFn = useServerFn(editAndResend);
 
-  const { data: messages = [] } = useQuery({
-    queryKey: ["messages", "general"],
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const endRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Get current user
+  const { data: user } = useQuery({
+    queryKey: ["current-user"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .is("document_id", null)
-        .order("created_at", { ascending: true });
-      return data ?? [];
+      const { data } = await supabase.auth.getUser();
+      return data.user;
     },
   });
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  // Fetch threads for general chat (exam_id is null)
+  const { data: threads = [] } = useQuery({
+    queryKey: ["general-threads", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase
+        .from("chat_threads")
+        .select("*")
+        .is("exam_id", null)
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false });
+      return (data ?? []) as Thread[];
+    },
+    enabled: !!user,
+  });
 
-  const ask = useMutation({
-    mutationFn: async (q: string) => chat({ data: { documentId: null, question: q } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["messages", "general"] }),
+  // Auto-select first thread if none selected
+  useEffect(() => {
+    if (threads.length > 0 && !activeThreadId) {
+      setActiveThreadId(threads[0].id);
+    }
+  }, [threads, activeThreadId]);
+
+  // Fetch messages for active thread
+  const { data: messages = [] } = useQuery({
+    queryKey: ["thread-messages", activeThreadId],
+    queryFn: async () => {
+      if (!activeThreadId) return [];
+      const { data } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("thread_id", activeThreadId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      return ((data ?? []) as Message[]).reverse();
+    },
+    enabled: !!activeThreadId,
+  });
+
+  // Scroll to bottom
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    }
+  }, [input]);
+
+  // Create new thread
+  const createThread = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not signed in");
+      const { data, error } = await supabase
+        .from("chat_threads")
+        .insert({ user_id: user.id, title: "New Chat" }) // exam_id is null by default
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (thread) => {
+      setActiveThreadId(thread.id);
+      qc.invalidateQueries({ queryKey: ["general-threads", user?.id] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const send = () => {
+  // Send message
+  const sendMessage = useMutation({
+    mutationFn: async (question: string) => {
+      if (!activeThreadId) throw new Error("No thread selected");
+      return chatFn({ data: { threadId: activeThreadId, question } });
+    },
+    onSuccess: (_res, question) => {
+      qc.invalidateQueries({ queryKey: ["thread-messages", activeThreadId] });
+      qc.invalidateQueries({ queryKey: ["general-threads", user?.id] });
+      // Auto-title
+      if (messages.length === 0 && activeThreadId) {
+        titleFn({ data: { threadId: activeThreadId, firstMessage: question } })
+          .then(() => qc.invalidateQueries({ queryKey: ["general-threads", user?.id] }))
+          .catch(() => {});
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Delete thread
+  const deleteThread = useMutation({
+    mutationFn: async (threadId: string) => {
+      const { error } = await supabase.from("chat_threads").delete().eq("id", threadId);
+      if (error) throw error;
+    },
+    onSuccess: (_res, threadId) => {
+      if (activeThreadId === threadId) {
+        const remaining = threads.filter((t) => t.id !== threadId);
+        setActiveThreadId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      qc.invalidateQueries({ queryKey: ["general-threads", user?.id] });
+      toast.success("Thread deleted");
+    },
+  });
+
+  // Edit and resend
+  const editMessage = useMutation({
+    mutationFn: async ({ messageId, newContent }: { messageId: string; newContent: string }) => {
+      if (!activeThreadId) throw new Error("No thread");
+      return editFn({
+        data: { messageId, threadId: activeThreadId, examId: null, newContent },
+      });
+    },
+    onSuccess: () => {
+      setEditingId(null);
+      setEditText("");
+      qc.invalidateQueries({ queryKey: ["thread-messages", activeThreadId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const send = useCallback(() => {
     const q = input.trim();
-    if (!q) return;
+    if (!q || !activeThreadId) return;
     setInput("");
-    ask.mutate(q);
-  };
+    sendMessage.mutate(q);
+  }, [input, activeThreadId, sendMessage]);
+
+  const sendSuggestion = useCallback(
+    (text: string) => {
+      if (!activeThreadId) return;
+      sendMessage.mutate(text);
+    },
+    [activeThreadId, sendMessage]
+  );
+
+  // Group threads
+  const groupedThreads = threads.reduce((acc, t) => {
+    const group = getDateGroup(t.updated_at);
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(t);
+    return acc;
+  }, {} as Record<string, Thread[]>);
+
+  const groups = ["Today", "Yesterday", "Previous 7 Days", "Older"].filter(
+    (g) => groupedThreads[g]?.length > 0
+  );
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="border-b bg-card px-6 py-4">
-        <h1 className="font-display text-2xl font-semibold">AI Tutor</h1>
-        <p className="text-sm text-muted-foreground">Ask anything — concepts, explanations, study help.</p>
-      </header>
-
-      <div className="flex-1 overflow-y-auto p-6">
-        {!messages.length && (
-          <div className="mx-auto max-w-md rounded-2xl border bg-card p-6 text-center">
-            <Sparkles className="mx-auto h-6 w-6 text-primary" />
-            <h3 className="mt-3 font-semibold">Start a conversation</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Try: "Explain integration by parts simply" or "Quiz me on photosynthesis."</p>
+    <div className="flex h-full">
+      {/* ── Left Sidebar ── */}
+      {sidebarOpen && (
+        <aside className="flex w-72 flex-col border-r bg-card">
+          <div className="border-b px-4 py-4 flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <Sparkles className="h-4 w-4 text-primary" />
+            </div>
+            <h2 className="font-display text-lg font-semibold">General Assistant</h2>
           </div>
-        )}
-        <div className="mx-auto max-w-3xl space-y-4">
-          {messages.map((m) => (
-            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
-                  m.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border"
-                }`}
-              >
-                {m.role === "user" ? (
-                  <div className="whitespace-pre-wrap">{m.content}</div>
-                ) : (
-                  <div className="prose prose-sm max-w-none dark:prose-invert"><ReactMarkdown>{m.content}</ReactMarkdown></div>
-                )}
+
+          <div className="px-3 py-3">
+            <Button
+              onClick={() => createThread.mutate()}
+              disabled={createThread.isPending}
+              className="w-full justify-start gap-2"
+              variant="outline"
+              size="sm"
+            >
+              <Plus className="h-4 w-4" />
+              New Chat
+            </Button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-2 pb-3">
+            {threads.length === 0 ? (
+              <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                No conversations yet
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {groups.map((group) => (
+                  <div key={group}>
+                    <h3 className="px-3 mb-2 text-xs font-medium text-muted-foreground">
+                      {group}
+                    </h3>
+                    <div className="space-y-0.5">
+                      {groupedThreads[group].map((t) => (
+                        <div
+                          key={t.id}
+                          className={`group flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm cursor-pointer transition-all ${
+                            activeThreadId === t.id
+                              ? "bg-primary/10 text-primary font-medium"
+                              : "text-foreground/80 hover:bg-muted/50"
+                          }`}
+                          onClick={() => setActiveThreadId(t.id)}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                          <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                          <button
+                            className="shrink-0 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteThread.mutate(t.id);
+                            }}
+                            title="Delete thread"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
+
+      {/* ── Right Panel ── */}
+      <div className="flex flex-1 flex-col">
+        <header className="flex items-center gap-3 border-b bg-card px-4 py-3 md:px-6">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="rounded-lg p-1.5 hover:bg-muted transition-colors"
+            title="Toggle sidebar"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-lg font-semibold truncate">
+              {activeThreadId
+                ? threads.find((t) => t.id === activeThreadId)?.title ?? "Chat"
+                : "General Chat"}
+            </h1>
+          </div>
+        </header>
+
+        {/* ── Messages Area ── */}
+        <div className="flex-1 overflow-y-auto">
+          {!activeThreadId ? (
+            /* ── No thread selected ── */
+            <div className="flex h-full items-center justify-center p-4">
+              <div className="mx-auto max-w-lg text-center">
+                <div className="chat-sparkle-float mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-gold/20 shadow-lg shadow-primary/5">
+                  <Sparkles className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="font-display text-2xl font-semibold tracking-tight">
+                  Start a new conversation
+                </h3>
+                <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+                  Ask the General Assistant about your study schedule.
+                  <br />
+                  <br />
+                  <strong>Note:</strong> To chat about your uploaded PDFs, go to the{" "}
+                  <strong>Exams</strong> tab and click <strong>Study Space</strong> on a specific
+                  exam.
+                </p>
+                <Button onClick={() => createThread.mutate()} className="mt-6" size="sm">
+                  <Plus className="mr-2 h-4 w-4" /> New Chat
+                </Button>
               </div>
             </div>
-          ))}
-          {ask.isPending && (
-            <div className="flex justify-start">
-              <div className="rounded-2xl border bg-card px-4 py-3 text-sm text-muted-foreground">
-                <Loader2 className="inline h-3 w-3 animate-spin" /> Thinking...
+          ) : !messages.length && !sendMessage.isPending ? (
+            /* ── Empty thread — suggestions ── */
+            <div className="flex h-full items-center justify-center p-4">
+              <div className="mx-auto max-w-xl text-center">
+                <div className="chat-sparkle-float mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-gold/20 shadow-lg shadow-primary/5">
+                  <Sparkles className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="font-display text-2xl font-semibold tracking-tight">
+                  How can I help you plan?
+                </h3>
+                <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+                  To chat about your PDFs, use the <strong>Study Space</strong> button on the Exams
+                  tab.
+                </p>
+
+                {/* Suggestion chips */}
+                <div className="mx-auto mt-8 grid max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s.label}
+                      onClick={() => sendSuggestion(s.label)}
+                      className="chat-suggestion-chip flex items-center gap-2.5 rounded-xl border bg-card px-4 py-3 text-left text-sm text-foreground/80"
+                    >
+                      <s.icon className="h-4 w-4 shrink-0 text-primary/60" />
+                      <span>{s.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+            </div>
+          ) : (
+            /* ── Message list ── */
+            <div className="mx-auto max-w-3xl space-y-1 px-4 py-6 md:px-6">
+              {messages.map((m, idx) => (
+                <div
+                  key={m.id}
+                  className="chat-message-enter"
+                  style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+                >
+                  {m.role === "user" ? (
+                    /* ── User Message ── */
+                    <div className="group flex justify-end py-2">
+                      {editingId === m.id ? (
+                        <div className="w-full max-w-[85%] space-y-2">
+                          <Textarea
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            rows={3}
+                            className="resize-none rounded-xl"
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingId(null);
+                                setEditText("");
+                              }}
+                            >
+                              <X className="mr-1 h-3 w-3" /> Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={editMessage.isPending || !editText.trim()}
+                              onClick={() =>
+                                editMessage.mutate({
+                                  messageId: m.id,
+                                  newContent: editText.trim(),
+                                })
+                              }
+                            >
+                              {editMessage.isPending ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Send className="mr-1 h-3 w-3" />
+                              )}
+                              Resend
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative flex items-start gap-3">
+                          {/* Edit button */}
+                          <button
+                            className="mt-2 shrink-0 rounded-lg p-1.5 opacity-0 transition-all group-hover:opacity-100 hover:bg-muted"
+                            onClick={() => {
+                              setEditingId(m.id);
+                              setEditText(m.content);
+                            }}
+                            title="Edit message"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                          {/* Bubble */}
+                          <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm leading-relaxed text-primary-foreground shadow-sm">
+                            <div className="whitespace-pre-wrap">{m.content}</div>
+                          </div>
+                          {/* Avatar */}
+                          <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <User className="h-3.5 w-3.5 text-primary" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* ── Assistant Message ── */
+                    <div className="group flex gap-3 py-3">
+                      {/* Avatar */}
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-gold/20">
+                        <Bot className="h-3.5 w-3.5 text-primary" />
+                      </div>
+                      {/* Content */}
+                      <div className="chat-assistant-accent min-w-0 flex-1 rounded-2xl rounded-tl-md border bg-card/80 px-5 py-4 shadow-sm backdrop-blur-sm">
+                        <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={markdownComponents}
+                          >
+                            {m.content}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* ── Thinking indicator ── */}
+              {sendMessage.isPending && (
+                <div className="chat-message-enter flex gap-3 py-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-gold/20">
+                    <Bot className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl rounded-tl-md border bg-card/80 px-5 py-4 shadow-sm backdrop-blur-sm">
+                    <div className="chat-dot-pulse flex gap-1.5">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <span className="chat-shimmer text-xs font-medium">Thinking</span>
+                  </div>
+                </div>
+              )}
+
+              <div ref={endRef} />
             </div>
           )}
-          <div ref={endRef} />
         </div>
-      </div>
 
-      <div className="border-t bg-card p-4">
-        <div className="mx-auto flex max-w-3xl gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Ask the AI tutor anything..."
-            rows={1}
-            className="min-h-[44px] resize-none"
-          />
-          <Button onClick={send} disabled={ask.isPending || !input.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
+        {/* ── Input Area ── */}
+        {activeThreadId && (
+          <div className="border-t bg-gradient-to-t from-background to-background/80 p-4 backdrop-blur-sm">
+            <div className="chat-input-glow mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-card/90 p-2 shadow-sm backdrop-blur-sm">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                placeholder="Ask the AI tutor anything..."
+                rows={1}
+                className="min-h-[40px] max-h-[160px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+              />
+              <Button
+                onClick={send}
+                disabled={sendMessage.isPending || !input.trim()}
+                size="icon"
+                className="h-9 w-9 shrink-0 rounded-xl"
+              >
+                {sendMessage.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="mt-2 text-center text-[0.6875rem] text-muted-foreground/50">
+              Press <kbd className="rounded bg-muted px-1 py-0.5 text-[0.625rem] font-mono">Enter</kbd> to send · <kbd className="rounded bg-muted px-1 py-0.5 text-[0.625rem] font-mono">Shift+Enter</kbd> for new line
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

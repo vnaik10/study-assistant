@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { ArrowLeft, Send, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { chatWithDoc, runDocTask } from "@/lib/ai.functions";
 
-export const Route = createFileRoute("/_authenticated/documents/$id")({
+export const Route = createFileRoute("/_authenticated/documents_/$id")({
   component: DocChat,
 });
 
@@ -23,6 +24,7 @@ const TASKS = [
   { key: "mindmap", label: "Mind map" },
   { key: "important_topics", label: "Important topics" },
   { key: "viva", label: "Viva questions" },
+  { key: "mock_exam", label: "Mock Exam (20M pattern)" },
 ] as const;
 
 type TaskKey = (typeof TASKS)[number]["key"];
@@ -51,12 +53,15 @@ function DocChat() {
         .from("chat_messages")
         .select("*")
         .eq("document_id", id)
-        .order("created_at", { ascending: true });
-      return data ?? [];
+        .order("created_at", { ascending: false })
+        .limit(20);
+      return (data ?? []).reverse();
     },
   });
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const ask = useMutation({
     mutationFn: async (q: string) => chat({ data: { documentId: id, question: q } }),
@@ -83,7 +88,10 @@ function DocChat() {
   return (
     <div className="flex h-full flex-col">
       <header className="border-b bg-card px-6 py-4">
-        <Link to="/documents" className="mb-2 inline-flex items-center text-xs text-muted-foreground hover:text-foreground">
+        <Link
+          to="/documents"
+          className="mb-2 inline-flex items-center text-xs text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="mr-1 h-3 w-3" /> Back to library
         </Link>
         <h1 className="font-display text-2xl font-semibold">{doc?.title ?? "Document"}</h1>
@@ -117,12 +125,17 @@ function DocChat() {
               <div className="mx-auto max-w-md rounded-2xl border bg-card p-6 text-center">
                 <Sparkles className="mx-auto h-6 w-6 text-primary" />
                 <h3 className="mt-3 font-semibold">Ask anything about this document</h3>
-                <p className="mt-1 text-sm text-muted-foreground">The AI tutor answers from your uploaded material.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  The AI tutor answers from your uploaded material.
+                </p>
               </div>
             )}
             <div className="mx-auto max-w-3xl space-y-4">
               {messages.map((m) => (
-                <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  key={m.id}
+                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                >
                   <div
                     className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
                       m.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border"
@@ -131,7 +144,26 @@ function DocChat() {
                     {m.role === "user" ? (
                       <div className="whitespace-pre-wrap">{m.content}</div>
                     ) : (
-                      <div className="prose prose-sm max-w-none dark:prose-invert"><ReactMarkdown>{m.content}</ReactMarkdown></div>
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            table: ({ ...props }) => (
+                              <div className="overflow-x-auto w-full my-6 rounded-lg border bg-card/50">
+                                <table className="w-full m-0 text-sm" {...props} />
+                              </div>
+                            ),
+                            th: ({ ...props }) => (
+                              <th className="border-b bg-muted/50 px-4 py-3 text-left font-medium whitespace-nowrap" {...props} />
+                            ),
+                            td: ({ ...props }) => (
+                              <td className="border-b px-4 py-3" {...props} />
+                            ),
+                          }}
+                        >
+                          {m.content}
+                        </ReactMarkdown>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -151,7 +183,12 @@ function DocChat() {
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
                 placeholder="Ask about this document..."
                 rows={1}
                 className="min-h-[44px] resize-none"
@@ -167,10 +204,33 @@ function DocChat() {
         {taskOutput && (
           <aside className="hidden w-[420px] flex-shrink-0 overflow-y-auto border-l bg-muted/20 p-6 lg:block">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-lg font-semibold capitalize">{taskOutput.task.replace("_", " ")}</h3>
-              <Button size="sm" variant="ghost" onClick={() => setTaskOutput(null)}>×</Button>
+              <h3 className="font-display text-lg font-semibold capitalize">
+                {taskOutput.task.replace("_", " ")}
+              </h3>
+              <Button size="sm" variant="ghost" onClick={() => setTaskOutput(null)}>
+                ×
+              </Button>
             </div>
-            <div className="prose prose-sm max-w-none dark:prose-invert"><ReactMarkdown>{taskOutput.content}</ReactMarkdown></div>
+            <div className="prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  table: ({ ...props }) => (
+                    <div className="overflow-x-auto w-full my-6 rounded-lg border bg-card/50">
+                      <table className="w-full m-0 text-sm" {...props} />
+                    </div>
+                  ),
+                  th: ({ ...props }) => (
+                    <th className="border-b bg-muted/50 px-4 py-3 text-left font-medium whitespace-nowrap" {...props} />
+                  ),
+                  td: ({ ...props }) => (
+                    <td className="border-b px-4 py-3" {...props} />
+                  ),
+                }}
+              >
+                {taskOutput.content}
+              </ReactMarkdown>
+            </div>
           </aside>
         )}
       </div>

@@ -8,9 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { extractPdfText } from "@/lib/pdf";
 
@@ -25,6 +35,7 @@ type Doc = {
   doc_type: string;
   content: string;
   created_at: string;
+  exam_id: string | null;
 };
 
 function DocumentsPage() {
@@ -44,14 +55,35 @@ function DocumentsPage() {
     },
   });
 
+  const { data: exams = [] } = useQuery({
+    queryKey: ["exams"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("exams").select("id, subject");
+      if (error) throw error;
+      return data as { id: string; subject: string }[];
+    },
+  });
+  const examMap = new Map(exams.map((e) => [e.id, e.subject]));
+
   const addDoc = useMutation({
-    mutationFn: async (form: { title: string; subject: string; doc_type: string; content: string }) => {
-      const { data: { user } } = await supabase.auth.getUser();
+    mutationFn: async (form: {
+      title: string;
+      subject: string;
+      doc_type: string;
+      content: string;
+    }) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
       const { error } = await supabase.from("documents").insert({ ...form, user_id: user.id });
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["documents"] }); setOpen(false); toast.success("Document added"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      setOpen(false);
+      toast.success("Document added");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -60,7 +92,10 @@ function DocumentsPage() {
       const { error } = await supabase.from("documents").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["documents"] }); toast.success("Deleted"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Deleted");
+    },
   });
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -76,7 +111,14 @@ function DocumentsPage() {
       try {
         if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
           content = await extractPdfText(file);
+          if (!content.trim()) {
+            content = `[Scanned PDF: ${file.name}] — No extractable text found.`;
+            toast.info("Saved as reference. This seems to be a scanned PDF.");
+          }
           docType = docType === "notes" ? "pdf" : docType;
+        } else if (file.type.startsWith("image/")) {
+          content = `[Image: ${file.name}] — Image uploaded as material.`;
+          toast.info("Image saved as reference.");
         } else {
           content = await file.text();
         }
@@ -93,7 +135,12 @@ function DocumentsPage() {
       toast.error("Add some content or upload a file");
       return;
     }
-    addDoc.mutate({ title: title || "Untitled", subject: String(fd.get("subject") || ""), doc_type: docType, content });
+    addDoc.mutate({
+      title: title || "Untitled",
+      subject: String(fd.get("subject") || ""),
+      doc_type: docType,
+      content,
+    });
   };
 
   return (
@@ -101,21 +148,36 @@ function DocumentsPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold">Library</h1>
-          <p className="mt-2 text-muted-foreground">Upload PDFs, notes, and past papers — chat with them or generate summaries.</p>
+          <p className="mt-2 text-muted-foreground">
+            Upload PDFs, notes, and past papers — chat with them or generate summaries.
+          </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Add document</Button>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Add document
+            </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Add document</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Add document</DialogTitle>
+            </DialogHeader>
             <form className="space-y-4" onSubmit={onSubmit}>
-              <div><Label htmlFor="title">Title</Label><Input id="title" name="title" placeholder="(optional, autofills from file)" /></div>
-              <div><Label htmlFor="subject">Subject</Label><Input id="subject" name="subject" /></div>
+              <div>
+                <Label htmlFor="title">Title</Label>
+                <Input id="title" name="title" placeholder="(optional, autofills from file)" />
+              </div>
+              <div>
+                <Label htmlFor="subject">Subject</Label>
+                <Input id="subject" name="subject" />
+              </div>
               <div>
                 <Label>Type</Label>
                 <Select name="doc_type" defaultValue="notes">
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="notes">Notes</SelectItem>
                     <SelectItem value="pdf">PDF</SelectItem>
@@ -131,10 +193,23 @@ function DocumentsPage() {
               </div>
               <div>
                 <Label htmlFor="content">Or paste content</Label>
-                <Textarea id="content" name="content" rows={5} placeholder="Paste notes or content..." />
+                <Textarea
+                  id="content"
+                  name="content"
+                  rows={5}
+                  placeholder="Paste notes or content..."
+                />
               </div>
               <Button type="submit" className="w-full" disabled={addDoc.isPending || uploading}>
-                {uploading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Extracting...</> : <><Upload className="mr-2 h-4 w-4" /> Save</>}
+                {uploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Extracting...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" /> Save
+                  </>
+                )}
               </Button>
             </form>
           </DialogContent>
@@ -157,7 +232,14 @@ function DocumentsPage() {
               </div>
               <h3 className="font-semibold leading-snug">{d.title}</h3>
               {d.subject && <div className="mt-1 text-xs text-muted-foreground">{d.subject}</div>}
-              <p className="mt-2 line-clamp-3 text-xs text-muted-foreground">{d.content.slice(0, 200)}</p>
+              {d.exam_id && examMap.get(d.exam_id) && (
+                <div className="mt-1 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  Exam: {examMap.get(d.exam_id)}
+                </div>
+              )}
+              <p className="mt-2 line-clamp-3 text-xs text-muted-foreground">
+                {d.content.slice(0, 200)}
+              </p>
               <div className="mt-4 flex items-center justify-between border-t pt-3">
                 <Link to="/documents/$id" params={{ id: d.id }}>
                   <Button size="sm" variant="outline">
