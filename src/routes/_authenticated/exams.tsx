@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { generateStudyPlan, extractExamPattern } from "@/lib/ai.functions";
 import { extractPdfText } from "@/lib/pdf";
+import { extractPptxText } from "@/lib/pptx";
 import Tesseract from "tesseract.js";
 
 export const Route = createFileRoute("/_authenticated/exams")({
@@ -97,6 +98,9 @@ function ExamForm({
       if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
         toast.info("Extracting text from PDF...");
         text = await extractPdfText(file);
+      } else if (file.name.endsWith(".pptx")) {
+        toast.info("Extracting text from PPTX...");
+        text = await extractPptxText(file);
       } else if (file.type.startsWith("image/")) {
         toast.info("Extracting text from Image via OCR (this may take a moment)...");
         const worker = await Tesseract.createWorker("eng");
@@ -275,6 +279,12 @@ function UploadMaterialDialog({
             content = `[Scanned PDF: ${file.name}] — No extractable text found.`;
             toast.info("Saved as reference. This seems to be a scanned PDF.");
           }
+        } else if (file.name.endsWith(".pptx")) {
+          content = await extractPptxText(file);
+          if (!content.trim()) {
+            content = `[PPTX: ${file.name}] — No extractable text found.`;
+            toast.info("Saved as reference. PPTX might be image-based.");
+          }
         } else if (file.type.startsWith("image/")) {
           // For images, store a placeholder note — actual OCR can be added later
           content = `[Image: ${file.name}] — Image uploaded as study material.`;
@@ -316,15 +326,15 @@ function UploadMaterialDialog({
             <Input id="upload-title" name="title" placeholder="(optional, autofills from file)" />
           </div>
           <div>
-            <Label htmlFor="upload-file">Upload PDF or Image</Label>
+            <Label htmlFor="upload-file">Upload PDF, PPTX, or Image</Label>
             <Input
               id="upload-file"
               name="file"
               type="file"
-              accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp"
+              accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp,.pptx"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Supported: PDF, TXT, MD, PNG, JPG, WEBP
+              Supported: PDF, PPTX, TXT, MD, PNG, JPG, WEBP
             </p>
           </div>
           <div>

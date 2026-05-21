@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { extractPdfText } from "@/lib/pdf";
+import { extractPptxText } from "@/lib/pptx";
 
 export const Route = createFileRoute("/_authenticated/documents")({
   component: DocumentsPage,
@@ -116,6 +117,13 @@ function DocumentsPage() {
             toast.info("Saved as reference. This seems to be a scanned PDF.");
           }
           docType = docType === "notes" ? "pdf" : docType;
+        } else if (file.name.endsWith(".pptx")) {
+          content = await extractPptxText(file);
+          if (!content.trim()) {
+            content = `[PPTX: ${file.name}] — No extractable text found.`;
+            toast.info("Saved as reference. PPTX might be image-based.");
+          }
+          docType = docType === "notes" ? "pptx" : docType;
         } else if (file.type.startsWith("image/")) {
           content = `[Image: ${file.name}] — Image uploaded as material.`;
           toast.info("Image saved as reference.");
@@ -188,8 +196,8 @@ function DocumentsPage() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="file">Upload PDF or text file</Label>
-                <Input id="file" name="file" type="file" accept=".pdf,.txt,.md" />
+                <Label htmlFor="file">Upload PDF, PPTX, or text file</Label>
+                <Input id="file" name="file" type="file" accept=".pdf,.txt,.md,.pptx" />
               </div>
               <div>
                 <Label htmlFor="content">Or paste content</Label>
