@@ -127,13 +127,15 @@ export const chatWithDoc = createServerFn({ method: "POST" })
     }
 
     // recent history
-    const history = await supabase
+    const baseQuery = supabase
       .from("chat_messages")
       .select("role, content")
       .eq("user_id", userId)
-      .eq("document_id", data.documentId)
       .order("created_at", { ascending: true })
       .limit(20);
+    const history = data.documentId
+      ? await baseQuery.eq("document_id", data.documentId)
+      : await baseQuery.is("document_id", null);
 
     const messages: Msg[] = [
       {
