@@ -25,10 +25,12 @@ import {
   BookOpen,
   Calendar,
   Target,
+  Menu,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { chatInThread, generateThreadTitle, editAndResend } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/_authenticated/chat")({
@@ -242,83 +244,100 @@ function GeneralChat() {
     (g) => groupedThreads[g]?.length > 0
   );
 
+  const sidebarContent = (
+    <>
+      <div className="border-b px-4 py-4 flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+          <Sparkles className="h-4 w-4 text-primary" />
+        </div>
+        <h2 className="font-display text-lg font-semibold">General Assistant</h2>
+      </div>
+
+      <div className="px-3 py-3">
+        <Button
+          onClick={() => createThread.mutate()}
+          disabled={createThread.isPending}
+          className="w-full justify-start gap-2"
+          variant="outline"
+          size="sm"
+        >
+          <Plus className="h-4 w-4" />
+          New Chat
+        </Button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-2 pb-3">
+        {threads.length === 0 ? (
+          <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+            No conversations yet
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {groups.map((group) => (
+              <div key={group}>
+                <h3 className="px-3 mb-2 text-xs font-medium text-muted-foreground">
+                  {group}
+                </h3>
+                <div className="space-y-0.5">
+                  {groupedThreads[group].map((t) => (
+                    <div
+                      key={t.id}
+                      className={`group flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm cursor-pointer transition-all ${
+                        activeThreadId === t.id
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground/80 hover:bg-muted/50"
+                      }`}
+                      onClick={() => setActiveThreadId(t.id)}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                      <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                      <button
+                        className="shrink-0 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteThread.mutate(t.id);
+                        }}
+                        title="Delete thread"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex h-full">
-      {/* ── Left Sidebar ── */}
+      {/* ── Left Sidebar (Desktop) ── */}
       {sidebarOpen && (
-        <aside className="flex w-72 flex-col border-r bg-card">
-          <div className="border-b px-4 py-4 flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <Sparkles className="h-4 w-4 text-primary" />
-            </div>
-            <h2 className="font-display text-lg font-semibold">General Assistant</h2>
-          </div>
-
-          <div className="px-3 py-3">
-            <Button
-              onClick={() => createThread.mutate()}
-              disabled={createThread.isPending}
-              className="w-full justify-start gap-2"
-              variant="outline"
-              size="sm"
-            >
-              <Plus className="h-4 w-4" />
-              New Chat
-            </Button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-2 pb-3">
-            {threads.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-                No conversations yet
-              </p>
-            ) : (
-              <div className="space-y-6">
-                {groups.map((group) => (
-                  <div key={group}>
-                    <h3 className="px-3 mb-2 text-xs font-medium text-muted-foreground">
-                      {group}
-                    </h3>
-                    <div className="space-y-0.5">
-                      {groupedThreads[group].map((t) => (
-                        <div
-                          key={t.id}
-                          className={`group flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm cursor-pointer transition-all ${
-                            activeThreadId === t.id
-                              ? "bg-primary/10 text-primary font-medium"
-                              : "text-foreground/80 hover:bg-muted/50"
-                          }`}
-                          onClick={() => setActiveThreadId(t.id)}
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                          <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                          <button
-                            className="shrink-0 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteThread.mutate(t.id);
-                            }}
-                            title="Delete thread"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        <aside className="hidden md:flex w-72 flex-col border-r bg-card">
+          {sidebarContent}
         </aside>
       )}
 
       {/* ── Right Panel ── */}
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b bg-card px-4 py-3 md:px-6">
+      <div className="flex flex-1 flex-col min-w-0">
+        <header className="flex items-center gap-3 border-b bg-card px-4 py-3 md:px-6 shrink-0">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden shrink-0">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0 flex flex-col">
+              {sidebarContent}
+            </SheetContent>
+          </Sheet>
+
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded-lg p-1.5 hover:bg-muted transition-colors"
+            className="hidden md:flex rounded-lg p-1.5 hover:bg-muted transition-colors shrink-0"
             title="Toggle sidebar"
           >
             <MessageSquare className="h-4 w-4" />

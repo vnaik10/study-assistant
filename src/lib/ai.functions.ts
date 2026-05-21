@@ -730,3 +730,40 @@ CRITICAL CONSTRAINTS:
     return { formatted };
   });
 
+
+/** Auto-extract exam pattern from uploaded PDF or Image text */
+export const extractExamPattern = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        text: z.string().min(10),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const prompt = `You are an expert academic assistant. Read the provided text extracted from a university exam question paper (which might contain OCR errors) and output a concise, structured summary of its question pattern.
+
+FORMAT EXPECTATIONS:
+- How many modules/sections are there?
+- What are the marks per section/question?
+- What are the internal choices (e.g., Q1 OR Q2 in Module 1)?
+- Do NOT output generic advice, just the structural pattern.
+- Keep it under 100 words.
+
+PAPER TEXT:
+${data.text.slice(0, 10000)}`;
+
+    const pattern = await callDeepSeek(
+      [
+        {
+          role: "system",
+          content: "You extract concise exam patterns from raw syllabus or past paper text. Output plain text or very simple markdown. Keep it extremely brief.",
+        },
+        { role: "user", content: prompt },
+      ],
+      0.3,
+    );
+
+    return { pattern };
+  });

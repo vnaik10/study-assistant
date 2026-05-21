@@ -42,8 +42,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { generateStudyPlan } from "@/lib/ai.functions";
+import { generateStudyPlan, extractExamPattern } from "@/lib/ai.functions";
 import { extractPdfText } from "@/lib/pdf";
+import Tesseract from "tesseract.js";
 
 export const Route = createFileRoute("/_authenticated/exams")({
   component: ExamsPage,
@@ -81,6 +82,48 @@ function ExamForm({
   submitLabel: string;
 }) {
   const [priority, setPriority] = useState<string>(defaultValues?.priority ?? "medium");
+  const [pattern, setPattern] = useState<string>(defaultValues?.question_pattern ?? "");
+  const [extracting, setExtracting] = useState(false);
+  const extractFn = useServerFn(extractExamPattern);
+
+  const handleExtractPattern = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setExtracting(true);
+    let text = "";
+
+    try {
+      if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+        toast.info("Extracting text from PDF...");
+        text = await extractPdfText(file);
+      } else if (file.type.startsWith("image/")) {
+        toast.info("Extracting text from Image via OCR (this may take a moment)...");
+        const worker = await Tesseract.createWorker("eng");
+        const ret = await worker.recognize(file);
+        text = ret.data.text;
+        await worker.terminate();
+      } else {
+        text = await file.text();
+      }
+
+      if (!text || text.trim().length < 10) {
+        toast.error("Not enough text found in file to extract pattern.");
+        setExtracting(false);
+        return;
+      }
+
+      toast.info("Analyzing exam pattern with AI...");
+      const result = await extractFn({ data: { text } });
+      setPattern(result.pattern);
+      toast.success("Exam pattern extracted successfully!");
+    } catch (err) {
+      toast.error("Failed to extract pattern: " + (err as Error).message);
+    }
+    setExtracting(false);
+    // Reset input
+    e.target.value = "";
+  };
 
   return (
     <form
@@ -137,12 +180,33 @@ function ExamForm({
           id="exam-question-pattern"
           name="question_pattern"
           placeholder="e.g. 5 Modules, 20 marks each, internal choice between 2 questions per module..."
-          defaultValue={defaultValues?.question_pattern ?? ""}
+          value={pattern}
+          onChange={(e) => setPattern(e.target.value)}
           rows={3}
+          className="mt-1"
         />
-        <p className="mt-1 text-[0.8rem] text-muted-foreground">
-          AI will use this pattern to generate mock exams and study plans.
-        </p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-[0.8rem] text-muted-foreground">
+            AI will use this pattern to generate mock exams and study plans.
+          </p>
+          <div className="relative shrink-0">
+            <Input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg"
+              className="absolute inset-0 z-10 w-full opacity-0 cursor-pointer"
+              onChange={handleExtractPattern}
+              disabled={extracting}
+            />
+            <Button type="button" variant="outline" size="sm" disabled={extracting}>
+              {extracting ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {extracting ? "Extracting..." : "Auto-Extract from Past Paper"}
+            </Button>
+          </div>
+        </div>
       </div>
       <Button type="submit" className="w-full" disabled={isPending}>
         {submitLabel}
@@ -159,11 +223,13 @@ function UploadMaterialDialog({
   examSubject,
   open,
   onOpenChange,
+  defaultDocType = "notes",
 }: {
   examId: string;
   examSubject: string;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  defaultDocType?: string;
 }) {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
@@ -198,7 +264,7 @@ function UploadMaterialDialog({
     const file = fd.get("file") as File | null;
     let content = String(fd.get("content") || "");
     let title = String(fd.get("title") || "");
-    const docType = String(fd.get("doc_type") || "notes");
+    const docType = defaultDocType;
 
     if (file && file.size > 0) {
       setUploading(true);
@@ -248,21 +314,6 @@ function UploadMaterialDialog({
           <div>
             <Label htmlFor="upload-title">Title</Label>
             <Input id="upload-title" name="title" placeholder="(optional, autofills from file)" />
-          </div>
-          <div>
-            <Label>Type</Label>
-            <Select name="doc_type" defaultValue="notes">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="notes">Notes</SelectItem>
-                <SelectItem value="pdf">PDF</SelectItem>
-                <SelectItem value="past_paper">Previous Question Paper</SelectItem>
-                <SelectItem value="assignment">Assignment</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
           <div>
             <Label htmlFor="upload-file">Upload PDF or Image</Label>
@@ -318,6 +369,7 @@ function ExamCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadType, setUploadType] = useState<"notes" | "past_paper">("notes");
 
   const { data: examDocs = [] } = useQuery({
     queryKey: ["exam-docs", exam.id],
@@ -504,7 +556,10 @@ function ExamCard({
                   size="sm"
                   variant="outline"
                   className="mt-2 flex-1"
-                  onClick={() => setUploadOpen(true)}
+                  onClick={() => {
+                    setUploadType("notes");
+                    setUploadOpen(true);
+                  }}
                 >
                   <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload Notes
                 </Button>
@@ -512,7 +567,10 @@ function ExamCard({
                   size="sm"
                   variant="outline"
                   className="mt-2 flex-1"
-                  onClick={() => setUploadOpen(true)}
+                  onClick={() => {
+                    setUploadType("past_paper");
+                    setUploadOpen(true);
+                  }}
                 >
                   <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload Past Paper
                 </Button>
@@ -527,6 +585,7 @@ function ExamCard({
         examSubject={exam.subject}
         open={uploadOpen}
         onOpenChange={setUploadOpen}
+        defaultDocType={uploadType}
       />
     </>
   );

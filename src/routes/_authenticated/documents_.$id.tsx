@@ -191,7 +191,7 @@ function DocChat() {
 
         {/* Task output panel */}
         {taskOutput && (
-          <aside className="hidden w-[480px] flex-shrink-0 overflow-y-auto border-l bg-muted/20 p-6 lg:block">
+          <aside className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-background p-6 lg:static lg:block lg:w-[480px] lg:flex-shrink-0 lg:border-l lg:bg-muted/20">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display text-lg font-semibold capitalize">
                 {taskOutput.task.replace("_", " ")}
