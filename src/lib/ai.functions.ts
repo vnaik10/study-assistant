@@ -516,14 +516,14 @@ export const chatInThread = createServerFn({ method: "POST" })
     // General chat: inject upcoming exams as context
     const { data: exams } = await supabase
       .from("exams")
-      .select("subject, exam_date, priority, notes")
+      .select("id, subject, exam_date, priority, notes")
       .eq("user_id", userId)
       .order("exam_date", { ascending: true });
 
     let systemPrompt = "You are a professional AI Study Assistant. Reply in clean markdown.";
     if (exams && exams.length > 0) {
       const examsList = exams
-        .map((e) => `- **${e.subject}** on ${new Date(e.exam_date).toLocaleDateString()} (Priority: ${e.priority})`)
+        .map((e) => `- **${e.subject}** on ${new Date(e.exam_date).toLocaleDateString()} (Priority: ${e.priority}, ID: ${e.id})`)
         .join("\n");
       systemPrompt = `You are a professional AI Study Assistant and Planner. 
 Your goal is to help the user manage their study schedule based on the upcoming exams provided below.
@@ -531,8 +531,9 @@ Your goal is to help the user manage their study schedule based on the upcoming 
 CRITICAL RULES:
 1. STRICT ISOLATION: You currently do NOT have access to the user's uploaded PDFs or notes in this General Assistant tab. This is to maintain strict isolation between different subjects.
 2. If the user asks a subject-specific question (e.g. "What are the module 1 questions for Cloud Computing?"), you MUST NOT try to answer it using outside knowledge. 
-3. Instead, professionally and politely explain: "To ensure strict isolation between your subjects, I don't have access to your uploaded PDFs in this General Assistant tab. Please navigate to the **Exams** page and click the **Study Space** button on your specific exam card. Once inside the Study Space, I will have full access to all the PDFs and notes you uploaded for that subject!"
-4. Reply in clean markdown.
+3. Instead, professionally and politely explain: "I don't have access to your uploaded PDFs in this General Assistant tab. Please navigate to the **Study Space** for that exam where I have full access to your notes!"
+4. Then, you MUST provide a direct button link to their exam's study space using this exact markdown format: \`[Open Study Space](/exams/EXAM_ID)\` (Replace EXAM_ID with the exact ID from the schedule below).
+5. Reply in clean markdown.
 
 EXAM SCHEDULE:
 ${examsList}`;

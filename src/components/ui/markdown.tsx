@@ -153,16 +153,30 @@ export const markdownComponents = {
   ),
 
   // Links
-  a: ({ children, ...props }: any) => (
-    <a
-      className="font-medium text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:decoration-primary/70"
-      target="_blank"
-      rel="noopener noreferrer"
-      {...props}
-    >
-      {children}
-    </a>
-  ),
+  a: ({ children, href, ...props }: any) => {
+    if (href?.startsWith("/exams/")) {
+      return (
+        <a
+          href={href}
+          className="mt-3 mb-1 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 shadow-sm transition-all"
+        >
+          <Sparkles className="h-4 w-4" />
+          {children}
+        </a>
+      );
+    }
+    return (
+      <a
+        href={href}
+        className="font-medium text-primary underline decoration-primary/30 underline-offset-2 transition-colors hover:decoration-primary/70"
+        target="_blank"
+        rel="noopener noreferrer"
+        {...props}
+      >
+        {children}
+      </a>
+    );
+  },
 
   // Horizontal rule
   hr: () => (
