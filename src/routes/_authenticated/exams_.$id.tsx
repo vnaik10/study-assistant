@@ -44,6 +44,38 @@ type Message = {
 };
 
 /* ------------------------------------------------------------------ */
+/*  Typewriter Component                                               */
+/* ------------------------------------------------------------------ */
+function TypewriterMarkdown({ content }: { content: string }) {
+  const [displayed, setDisplayed] = useState("");
+  const index = useRef(0);
+
+  useEffect(() => {
+    index.current = 0;
+    setDisplayed("");
+    
+    // Type out 15 characters every 20ms for a fast typing effect
+    const interval = setInterval(() => {
+      index.current += 15;
+      if (index.current >= content.length) {
+        setDisplayed(content);
+        clearInterval(interval);
+      } else {
+        setDisplayed(content.substring(0, index.current));
+      }
+    }, 20);
+
+    return () => clearInterval(interval);
+  }, [content]);
+
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {displayed}
+    </ReactMarkdown>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Exam Chat Page                                                     */
 /* ------------------------------------------------------------------ */
 function ExamChatPage() {
@@ -59,6 +91,14 @@ function ExamChatPage() {
   const [editText, setEditText] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
+  const seenMessages = useRef<Set<string>>(new Set());
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+
+  // Clear seen on thread switch
+  useEffect(() => {
+    seenMessages.current.clear();
+    setTypingMessageId(null);
+  }, [activeThreadId]);
 
   // Fetch exam info
   const { data: exam } = useQuery({
@@ -124,6 +164,24 @@ function ExamChatPage() {
   // Scroll to bottom on new messages
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Track new messages for typing effect
+  useEffect(() => {
+    if (messages.length > 0) {
+      let lastNewAssistantMsgId: string | null = null;
+      messages.forEach((m) => {
+        if (!seenMessages.current.has(m.id)) {
+          if (seenMessages.current.size > 0 && m.role === "assistant") {
+            lastNewAssistantMsgId = m.id;
+          }
+          seenMessages.current.add(m.id);
+        }
+      });
+      if (lastNewAssistantMsgId) {
+        setTypingMessageId(lastNewAssistantMsgId);
+      }
+    }
   }, [messages]);
 
   // Create new thread
@@ -424,12 +482,16 @@ function ExamChatPage() {
                           <div className="whitespace-pre-wrap">{m.content}</div>
                         ) : (
                           <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={markdownComponents}
-                            >
-                              {m.content}
-                            </ReactMarkdown>
+                            {m.id === typingMessageId ? (
+                              <TypewriterMarkdown content={m.content} />
+                            ) : (
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={markdownComponents}
+                              >
+                                {m.content}
+                              </ReactMarkdown>
+                            )}
                           </div>
                         )}
                       </div>
@@ -449,6 +511,16 @@ function ExamChatPage() {
                   )}
                 </div>
               ))}
+              {/* ── Pending User Message ── */}
+              {sendMessage.isPending && sendMessage.variables && (
+                <div className="group flex justify-end">
+                  <div className="relative">
+                    <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm bg-primary text-primary-foreground opacity-60">
+                      <div className="whitespace-pre-wrap">{sendMessage.variables}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {sendMessage.isPending && (
                 <div className="flex justify-start">
                   <div className="rounded-2xl border bg-card px-4 py-3 text-sm text-muted-foreground">

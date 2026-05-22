@@ -69,6 +69,38 @@ const SUGGESTIONS = [
 ];
 
 /* ─────────────────────────────────────────────
+   Typewriter Component
+   ───────────────────────────────────────────── */
+function TypewriterMarkdown({ content }: { content: string }) {
+  const [displayed, setDisplayed] = useState("");
+  const index = useRef(0);
+
+  useEffect(() => {
+    index.current = 0;
+    setDisplayed("");
+    
+    // Type out 15 characters every 20ms for a fast typing effect
+    const interval = setInterval(() => {
+      index.current += 15;
+      if (index.current >= content.length) {
+        setDisplayed(content);
+        clearInterval(interval);
+      } else {
+        setDisplayed(content.substring(0, index.current));
+      }
+    }, 20);
+
+    return () => clearInterval(interval);
+  }, [content]);
+
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {displayed}
+    </ReactMarkdown>
+  );
+}
+
+/* ─────────────────────────────────────────────
    Main Component
    ───────────────────────────────────────────── */
 function GeneralChat() {
@@ -84,6 +116,14 @@ function GeneralChat() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const seenMessages = useRef<Set<string>>(new Set());
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+
+  // Clear seen on thread switch
+  useEffect(() => {
+    seenMessages.current.clear();
+    setTypingMessageId(null);
+  }, [activeThreadId]);
 
   // Get current user
   const { data: user } = useQuery({
@@ -136,6 +176,24 @@ function GeneralChat() {
   // Scroll to bottom
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Track new messages for typing effect
+  useEffect(() => {
+    if (messages.length > 0) {
+      let lastNewAssistantMsgId: string | null = null;
+      messages.forEach((m) => {
+        if (!seenMessages.current.has(m.id)) {
+          if (seenMessages.current.size > 0 && m.role === "assistant") {
+            lastNewAssistantMsgId = m.id;
+          }
+          seenMessages.current.add(m.id);
+        }
+      });
+      if (lastNewAssistantMsgId) {
+        setTypingMessageId(lastNewAssistantMsgId);
+      }
+    }
   }, [messages]);
 
   // Auto-resize textarea
@@ -495,18 +553,36 @@ function GeneralChat() {
                       {/* Content */}
                       <div className="chat-assistant-accent min-w-0 flex-1 rounded-2xl rounded-tl-md border bg-card/80 px-5 py-4 shadow-sm backdrop-blur-sm">
                         <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={markdownComponents}
-                          >
-                            {m.content}
-                          </ReactMarkdown>
+                          {m.id === typingMessageId ? (
+                            <TypewriterMarkdown content={m.content} />
+                          ) : (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={markdownComponents}
+                            >
+                              {m.content}
+                            </ReactMarkdown>
+                          )}
                         </div>
                       </div>
                     </div>
                   )}
                 </div>
               ))}
+
+              {/* ── Pending User Message ── */}
+              {sendMessage.isPending && sendMessage.variables && (
+                <div className="chat-message-enter group flex justify-end py-2">
+                  <div className="relative flex items-start gap-3">
+                    <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm leading-relaxed text-primary-foreground shadow-sm opacity-60">
+                      <div className="whitespace-pre-wrap">{sendMessage.variables}</div>
+                    </div>
+                    <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                      <User className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* ── Thinking indicator ── */}
               {sendMessage.isPending && (
