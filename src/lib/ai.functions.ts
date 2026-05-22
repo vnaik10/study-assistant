@@ -495,13 +495,13 @@ export const chatWithDoc = createServerFn({ method: "POST" })
       { role: "user", content: data.question },
     ];
 
+    // Persist user message immediately to ensure correct chronological ordering
+    await supabase.from("chat_messages").insert({ user_id: userId, document_id: data.documentId, role: "user", content: data.question });
+
     const answer = await callDeepSeek(messages, 0.4);
 
-    // Persist messages
-    await supabase.from("chat_messages").insert([
-      { user_id: userId, document_id: data.documentId, role: "user", content: data.question },
-      { user_id: userId, document_id: data.documentId, role: "assistant", content: answer },
-    ]);
+    // Persist assistant message
+    await supabase.from("chat_messages").insert({ user_id: userId, document_id: data.documentId, role: "assistant", content: answer });
 
     return { answer };
   });
@@ -691,12 +691,13 @@ export const chatInExamSpace = createServerFn({ method: "POST" })
       { role: "user", content: data.question },
     ];
 
+    // Persist user message immediately to ensure correct chronological ordering
+    await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "user", content: data.question });
+
     const answer = await callDeepSeek(messages, 0.4);
 
-    await supabase.from("chat_messages").insert([
-      { user_id: userId, thread_id: data.threadId, role: "user", content: data.question },
-      { user_id: userId, thread_id: data.threadId, role: "assistant", content: answer },
-    ]);
+    // Persist assistant message
+    await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "assistant", content: answer });
 
     return { answer };
   });
@@ -744,12 +745,13 @@ export const chatInThread = createServerFn({ method: "POST" })
       { role: "user", content: data.question },
     ];
 
+    // Persist user message immediately to ensure correct chronological ordering
+    await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "user", content: data.question });
+
     const answer = await callDeepSeek(messages, 0.4);
 
-    await supabase.from("chat_messages").insert([
-      { user_id: userId, thread_id: data.threadId, role: "user", content: data.question },
-      { user_id: userId, thread_id: data.threadId, role: "assistant", content: answer },
-    ]);
+    // Persist assistant message
+    await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "assistant", content: answer });
 
     return { answer };
   });
