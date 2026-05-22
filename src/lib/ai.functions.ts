@@ -761,9 +761,14 @@ export const chatInExamSpace = createServerFn({ method: "POST" })
 
     let systemPrompt: string;
     if (materialContext) {
-      systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n${examPattern}\n\n## AVAILABLE MATERIALS FOR ${examSubject}:\n${materialContext}\n\n## CRITICAL RULES:\n1. You have access to ${docs?.length || 0} documents above\n2. Cite which document you used: [Source: Document Title]\n3. If information spans multiple docs, cite all relevant ones\n4. If answer not in materials: "I can only answer based on the uploaded documents for ${examSubject}, and this information is not present."\n5. Be concise but complete. Use markdown formatting.`;
+      systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n${examPattern}\n\n## AVAILABLE MATERIALS FOR ${examSubject}:\n${materialContext}\n\n## CRITICAL RULES:
+1. You have access to ${docs?.length || 0} documents above.
+2. ABSOLUTELY NO HALLUCINATION OR OUTSIDE KNOWLEDGE. You must ONLY answer questions related to ${examSubject} based strictly on the uploaded documents.
+3. If the user asks about a different subject (like Biology in a Chemistry space), YOU MUST REFUSE TO ANSWER and state: "This study space is dedicated to ${examSubject}. Please go to the appropriate exam space for other subjects."
+4. If the answer is not in the materials: "I can only answer based on the uploaded documents for ${examSubject}, and this information is not present."
+5. Cite which document you used: [Source: Document Title].`;
     } else {
-      systemPrompt = `You are a study tutor for ${examSubject}. The student has not uploaded any documents yet. Politely inform them they need to upload notes, PDFs, or question papers before you can help. Do not answer academic questions without materials.`;
+      systemPrompt = `You are a study tutor for ${examSubject}. The student has not uploaded any documents yet. Politely inform them they need to upload notes, PDFs, or question papers before you can help. Do not answer any academic questions (for ${examSubject} or any other subject) without materials. ABSOLUTELY NO OUTSIDE KNOWLEDGE.`;
     }
 
     // Fetch thread history

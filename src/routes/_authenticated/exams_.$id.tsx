@@ -134,7 +134,7 @@ function ExamChatPage() {
   // Scroll to bottom on new messages
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingMessage]);
+  }, [messages]);
 
 
   // Create new thread
