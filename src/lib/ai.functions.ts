@@ -815,13 +815,21 @@ export const chatInThread = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .order("exam_date", { ascending: true });
 
-    let systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n\nYou are a professional AI Study Assistant and Planner.`;
+    let systemPrompt = `${BASE_SYSTEM_CONSTRAINTS}\n\nYou are a professional AI Study Assistant and Planner.
+## CRITICAL ISOLATION RULES:
+1. You do NOT have access to uploaded PDFs/notes in this General tab.
+2. ABSOLUTELY NO HALLUCINATION OR OUTSIDE KNOWLEDGE. If a user asks for general academic facts (e.g., "who is the father of biology"), YOU MUST REFUSE TO ANSWER. Tell them you are a study planner, and they should upload their notes to a specific Study Space.
+3. If the user asks for notes/materials for a specific subject, check the UPCOMING EXAMS list below.
+4. If the subject IS in the UPCOMING EXAMS list, provide the redirection link exactly in this format: [Open Subject Name Study Space](/exams/EXAM_ID).
+5. If the subject IS NOT in the UPCOMING EXAMS list, DO NOT invent or suggest random links. Explicitly say: "You haven't added an exam for this subject yet. Please add it to your Dashboard first."`;
     
     if (exams && exams.length > 0) {
       const examsList = exams
         .map((e) => `- **${e.subject}** on ${new Date(e.exam_date).toLocaleDateString()} (Priority: ${e.priority}, ID: ${e.id})`)
         .join("\n");
-      systemPrompt += `\n\n## UPCOMING EXAMS:\n${examsList}\n\n## CRITICAL ISOLATION RULES:\n1. You do NOT have access to uploaded PDFs/notes in this General tab\n2. For subject-specific questions (e.g., asking for Biology notes or topics), you MUST NOT answer using outside knowledge\n3. Instead, politely explain you don't have access in this General Assistant tab and redirect them to the specific Study Space.\n4. You MUST provide the redirection link exactly in this format: [Open Subject Name Study Space](/exams/EXAM_ID) — replace "Subject Name" with the actual subject and EXAM_ID with the exact ID from the schedule above.\n5. You MAY discuss scheduling, prioritization, and general study strategies`;
+      systemPrompt += `\n\n## UPCOMING EXAMS:\n${examsList}`;
+    } else {
+      systemPrompt += `\n\n## UPCOMING EXAMS:\n(No exams scheduled yet. The user must add them to the Dashboard.)`;
     }
 
     const { data: history } = await supabase
@@ -954,35 +962,34 @@ export const formatNoteWithAI = createServerFn({ method: "POST" })
     }
 
     const maxContext = getModelContextLimit();
-    const content = sliceByTokens(doc.content, maxContext * 0.55, 2000);
+    // Allow much more context for formatting to prevent truncating long notes
+    const content = sliceByTokens(doc.content, maxContext * 0.9, 2000);
 
     const formatted = await callDeepSeek(
       [
         {
           role: "system",
-          content: `You are an expert academic note formatter. Transform raw notes into beautifully structured, exam-ready markdown.
+          content: `You are an expert academic note formatter. Transform raw notes into beautifully structured, exam-ready markdown WITHOUT losing any information.
 
 ## FORMATTING RULES:
 1. **Headings**: ## for main topics, ### for subtopics
 2. **Key Terms**: Bold (**term**) all important concepts
-3. **Lists**: Convert paragraphs into bullets or numbered lists
+3. **Structure**: Organize the content logically using bullet points or numbered lists where appropriate, BUT YOU MUST RETAIN EVERY SINGLE EXPLANATION AND DETAIL.
 4. **Tables**: Use markdown tables for comparisons
 5. **Definitions**: Format as "> **Term**: Definition"
 6. **Formulas**: Wrap in backticks for inline code
 7. **Dividers**: Use --- between major sections
-8. **Summary**: Add "📋 Key Takeaways" at the end
-9. **Mnemonics**: Suggest memory aids in *italics* where applicable
-10. **Highlights**: Use "⚡ Important" or "📝 Note" prefixes
+8. **Highlights**: Use "⚡ Important" or "📝 Note" prefixes
 
 ## CRITICAL CONSTRAINTS:
-- Do NOT add information not in the original
-- Do NOT remove information from the original
-- ONLY restructure, reformat, reorganize
-- Fix grammar/spelling
-- Make it scannable — quick topic lookup should be easy
+- YOU MUST PRESERVE 100% OF THE ORIGINAL CONTENT.
+- DO NOT summarize, condense, or remove any explanations, examples, or sentences from the original.
+- The output must contain all the original knowledge base, just formatted better.
+- ONLY restructure, reformat, reorganize, and add markdown styling.
+- Fix grammar/spelling.
 
 ## OUTPUT VALIDATION:
-Before finishing, verify:\n- At least 2 heading levels present\n- Key terms are bolded\n- Has a Key Takeaways section\n- No raw HTML tags`,
+Before finishing, verify:\n- Every single detail from the original text is present in your output.\n- Key terms are bolded\n- No raw HTML tags`,
         },
         {
           role: "user",

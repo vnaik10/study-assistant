@@ -67,23 +67,25 @@ function DocumentsPage() {
   const examMap = new Map(exams.map((e) => [e.id, e.subject]));
 
   const addDoc = useMutation({
-    mutationFn: async (form: {
+    mutationFn: async (docsToInsert: {
       title: string;
       subject: string;
       doc_type: string;
       content: string;
-    }) => {
+    }[]) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
-      const { error } = await supabase.from("documents").insert({ ...form, user_id: user.id });
+      
+      const payload = docsToInsert.map(d => ({ ...d, user_id: user.id }));
+      const { error } = await supabase.from("documents").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["documents"] });
       setOpen(false);
-      toast.success("Document added");
+      toast.success("Document(s) added");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -102,53 +104,71 @@ function DocumentsPage() {
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const file = fd.get("file") as File | null;
-    let content = String(fd.get("content") || "");
-    let title = String(fd.get("title") || "");
-    let docType = String(fd.get("doc_type") || "notes");
+    const files = fd.getAll("file") as File[];
+    const textContent = String(fd.get("content") || "");
+    const baseTitle = String(fd.get("title") || "");
+    const baseDocType = String(fd.get("doc_type") || "notes");
+    const subject = String(fd.get("subject") || "");
 
-    if (file && file.size > 0) {
+    const docsToInsert = [];
+    const validFiles = files.filter((f) => f && f.size > 0);
+
+    if (validFiles.length > 0) {
       setUploading(true);
       try {
-        if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-          content = await extractPdfText(file);
-          if (!content.trim()) {
-            content = `[Scanned PDF: ${file.name}] — No extractable text found.`;
-            toast.info("Saved as reference. This seems to be a scanned PDF.");
+        for (const file of validFiles) {
+          let content = "";
+          let docType = baseDocType;
+          let title = baseTitle || file.name.replace(/\.[^.]+$/, "");
+
+          if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+            content = await extractPdfText(file);
+            if (!content.trim()) {
+              content = `[Scanned PDF: ${file.name}] — No extractable text found.`;
+              toast.info(`Saved ${file.name} as reference. This seems to be a scanned PDF.`);
+            }
+            docType = baseDocType === "notes" ? "pdf" : baseDocType;
+          } else if (file.name.endsWith(".pptx")) {
+            content = await extractPptxText(file);
+            if (!content.trim()) {
+              content = `[PPTX: ${file.name}] — No extractable text found.`;
+              toast.info(`Saved ${file.name} as reference. PPTX might be image-based.`);
+            }
+            docType = baseDocType === "notes" ? "pptx" : baseDocType;
+          } else if (file.type.startsWith("image/")) {
+            content = `[Image: ${file.name}] — Image uploaded as material.`;
+            toast.info(`Image ${file.name} saved as reference.`);
+          } else {
+            content = await file.text();
           }
-          docType = docType === "notes" ? "pdf" : docType;
-        } else if (file.name.endsWith(".pptx")) {
-          content = await extractPptxText(file);
-          if (!content.trim()) {
-            content = `[PPTX: ${file.name}] — No extractable text found.`;
-            toast.info("Saved as reference. PPTX might be image-based.");
+          
+          if (content.trim()) {
+             docsToInsert.push({ title, subject, doc_type: docType, content });
           }
-          docType = docType === "notes" ? "pptx" : docType;
-        } else if (file.type.startsWith("image/")) {
-          content = `[Image: ${file.name}] — Image uploaded as material.`;
-          toast.info("Image saved as reference.");
-        } else {
-          content = await file.text();
         }
-        if (!title) title = file.name.replace(/\.[^.]+$/, "");
       } catch (err) {
-        toast.error("Failed to read file: " + (err as Error).message);
+        toast.error("Failed to read file(s): " + (err as Error).message);
         setUploading(false);
         return;
       }
       setUploading(false);
     }
 
-    if (!content.trim()) {
-      toast.error("Add some content or upload a file");
+    if (textContent.trim()) {
+      docsToInsert.push({
+        title: baseTitle || "Untitled Note",
+        subject,
+        doc_type: baseDocType,
+        content: textContent
+      });
+    }
+
+    if (docsToInsert.length === 0) {
+      toast.error("Add some content or upload a valid file");
       return;
     }
-    addDoc.mutate({
-      title: title || "Untitled",
-      subject: String(fd.get("subject") || ""),
-      doc_type: docType,
-      content,
-    });
+
+    addDoc.mutate(docsToInsert);
   };
 
   return (
@@ -196,8 +216,8 @@ function DocumentsPage() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="file">Upload PDF, PPTX, or text file</Label>
-                <Input id="file" name="file" type="file" accept=".pdf,.txt,.md,.pptx" />
+                <Label htmlFor="file">Upload PDF, PPTX, or text files</Label>
+                <Input id="file" name="file" type="file" multiple accept=".pdf,.txt,.md,.pptx" />
               </div>
               <div>
                 <Label htmlFor="content">Or paste content</Label>

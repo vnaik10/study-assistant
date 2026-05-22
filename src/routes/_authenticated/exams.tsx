@@ -239,25 +239,27 @@ function UploadMaterialDialog({
   const [uploading, setUploading] = useState(false);
 
   const addDoc = useMutation({
-    mutationFn: async (form: {
+    mutationFn: async (docsToInsert: {
       title: string;
       subject: string;
       doc_type: string;
       content: string;
       exam_id: string;
-    }) => {
+    }[]) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
-      const { error } = await supabase.from("documents").insert({ ...form, user_id: user.id });
+      
+      const payload = docsToInsert.map(d => ({ ...d, user_id: user.id }));
+      const { error } = await supabase.from("documents").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["exam-docs", examId] });
       qc.invalidateQueries({ queryKey: ["documents"] });
       onOpenChange(false);
-      toast.success("Material uploaded");
+      toast.success("Material(s) uploaded");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -265,53 +267,69 @@ function UploadMaterialDialog({
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const file = fd.get("file") as File | null;
-    let content = String(fd.get("content") || "");
-    let title = String(fd.get("title") || "");
+    const files = fd.getAll("file") as File[];
+    const textContent = String(fd.get("content") || "");
+    const baseTitle = String(fd.get("title") || "");
     const docType = defaultDocType;
 
-    if (file && file.size > 0) {
+    const docsToInsert = [];
+    const validFiles = files.filter((f) => f && f.size > 0);
+
+    if (validFiles.length > 0) {
       setUploading(true);
       try {
-        if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-          content = await extractPdfText(file);
-          if (!content.trim()) {
-            content = `[Scanned PDF: ${file.name}] — No extractable text found.`;
-            toast.info("Saved as reference. This seems to be a scanned PDF.");
+        for (const file of validFiles) {
+          let content = "";
+          let title = baseTitle || file.name.replace(/\.[^.]+$/, "");
+
+          if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+            content = await extractPdfText(file);
+            if (!content.trim()) {
+              content = `[Scanned PDF: ${file.name}] — No extractable text found.`;
+              toast.info(`Saved ${file.name} as reference. This seems to be a scanned PDF.`);
+            }
+          } else if (file.name.endsWith(".pptx")) {
+            content = await extractPptxText(file);
+            if (!content.trim()) {
+              content = `[PPTX: ${file.name}] — No extractable text found.`;
+              toast.info(`Saved ${file.name} as reference. PPTX might be image-based.`);
+            }
+          } else if (file.type.startsWith("image/")) {
+            // For images, store a placeholder note — actual OCR can be added later
+            content = `[Image: ${file.name}] — Image uploaded as study material.`;
+            toast.info(`Image ${file.name} saved as reference. PDF upload recommended for text extraction.`);
+          } else {
+            content = await file.text();
           }
-        } else if (file.name.endsWith(".pptx")) {
-          content = await extractPptxText(file);
-          if (!content.trim()) {
-            content = `[PPTX: ${file.name}] — No extractable text found.`;
-            toast.info("Saved as reference. PPTX might be image-based.");
+          
+          if (content.trim()) {
+             docsToInsert.push({ title, subject: examSubject, doc_type: docType, content, exam_id: examId });
           }
-        } else if (file.type.startsWith("image/")) {
-          // For images, store a placeholder note — actual OCR can be added later
-          content = `[Image: ${file.name}] — Image uploaded as study material.`;
-          toast.info("Image saved as reference. PDF upload recommended for text extraction.");
-        } else {
-          content = await file.text();
         }
-        if (!title) title = file.name.replace(/\.[^.]+$/, "");
       } catch (err) {
-        toast.error("Failed to read file: " + (err as Error).message);
+        toast.error("Failed to read file(s): " + (err as Error).message);
         setUploading(false);
         return;
       }
       setUploading(false);
     }
 
-    if (!content.trim()) {
-      toast.error("Add some content or upload a file");
+    if (textContent.trim()) {
+      docsToInsert.push({
+        title: baseTitle || "Untitled Note",
+        subject: examSubject,
+        doc_type: docType,
+        content: textContent,
+        exam_id: examId
+      });
+    }
+
+    if (docsToInsert.length === 0) {
+      toast.error("Add some content or upload a valid file");
       return;
     }
-    addDoc.mutate({
-      title: title || "Untitled",
-      subject: examSubject,
-      doc_type: docType,
-      content,
-      exam_id: examId,
-    });
+
+    addDoc.mutate(docsToInsert);
   };
 
   return (
@@ -331,6 +349,7 @@ function UploadMaterialDialog({
               id="upload-file"
               name="file"
               type="file"
+              multiple
               accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp,.pptx"
             />
             <p className="mt-1 text-xs text-muted-foreground">
