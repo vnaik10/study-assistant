@@ -54,6 +54,7 @@
     "input-otp": "^1.4.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.575.0",
+    "nitro": "^3.0.260429-beta",
     "openai": "^6.38.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.0",

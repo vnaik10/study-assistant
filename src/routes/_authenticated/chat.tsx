@@ -69,38 +69,6 @@ const SUGGESTIONS = [
 ];
 
 /* ─────────────────────────────────────────────
-   Typewriter Component
-   ───────────────────────────────────────────── */
-function TypewriterMarkdown({ content }: { content: string }) {
-  const [displayed, setDisplayed] = useState("");
-  const index = useRef(0);
-
-  useEffect(() => {
-    index.current = 0;
-    setDisplayed("");
-    
-    // Type out 15 characters every 20ms for a fast typing effect
-    const interval = setInterval(() => {
-      index.current += 15;
-      if (index.current >= content.length) {
-        setDisplayed(content);
-        clearInterval(interval);
-      } else {
-        setDisplayed(content.substring(0, index.current));
-      }
-    }, 20);
-
-    return () => clearInterval(interval);
-  }, [content]);
-
-  return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-      {displayed}
-    </ReactMarkdown>
-  );
-}
-
-/* ─────────────────────────────────────────────
    Main Component
    ───────────────────────────────────────────── */
 function GeneralChat() {
@@ -116,13 +84,13 @@ function GeneralChat() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const seenMessages = useRef<Set<string>>(new Set());
-  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
-  // Clear seen on thread switch
+  // Clear on thread switch
   useEffect(() => {
-    seenMessages.current.clear();
-    setTypingMessageId(null);
+    setStreamingMessage("");
+    setIsStreaming(false);
   }, [activeThreadId]);
 
   // Get current user
@@ -178,23 +146,7 @@ function GeneralChat() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Track new messages for typing effect
-  useEffect(() => {
-    if (messages.length > 0) {
-      let lastNewAssistantMsgId: string | null = null;
-      messages.forEach((m) => {
-        if (!seenMessages.current.has(m.id)) {
-          if (seenMessages.current.size > 0 && m.role === "assistant") {
-            lastNewAssistantMsgId = m.id;
-          }
-          seenMessages.current.add(m.id);
-        }
-      });
-      if (lastNewAssistantMsgId) {
-        setTypingMessageId(lastNewAssistantMsgId);
-      }
-    }
-  }, [messages]);
+
 
   // Auto-resize textarea
   useEffect(() => {
@@ -228,7 +180,19 @@ function GeneralChat() {
   const sendMessage = useMutation({
     mutationFn: async (question: string) => {
       if (!activeThreadId) throw new Error("No thread selected");
-      return chatFn({ data: { threadId: activeThreadId, question } });
+      setIsStreaming(true);
+      setStreamingMessage("");
+      try {
+        const stream = await chatFn({ data: { threadId: activeThreadId, question } });
+        let currentResponse = "";
+        for await (const chunk of stream) {
+          currentResponse += chunk;
+          setStreamingMessage(currentResponse);
+        }
+        return currentResponse;
+      } finally {
+        setIsStreaming(false);
+      }
     },
     onSuccess: (_res, question) => {
       qc.invalidateQueries({ queryKey: ["thread-messages", activeThreadId] });
@@ -239,8 +203,13 @@ function GeneralChat() {
           .then(() => qc.invalidateQueries({ queryKey: ["general-threads", user?.id] }))
           .catch(() => {});
       }
+      setInput("");
     },
     onError: (e: Error) => toast.error(e.message),
+    onSettled: () => {
+      setStreamingMessage("");
+      setIsStreaming(false);
+    }
   });
 
   // Delete thread
@@ -262,10 +231,22 @@ function GeneralChat() {
   // Edit and resend
   const editMessage = useMutation({
     mutationFn: async ({ messageId, newContent }: { messageId: string; newContent: string }) => {
-      if (!activeThreadId) throw new Error("No thread");
-      return editFn({
-        data: { messageId, threadId: activeThreadId, examId: null, newContent },
-      });
+      if (!activeThreadId) throw new Error("No thread selected");
+      setIsStreaming(true);
+      setStreamingMessage("");
+      try {
+        const stream = await editFn({
+          data: { messageId, threadId: activeThreadId, examId: null, newContent },
+        });
+        let currentResponse = "";
+        for await (const chunk of stream) {
+          currentResponse += chunk;
+          setStreamingMessage(currentResponse);
+        }
+        return currentResponse;
+      } finally {
+        setIsStreaming(false);
+      }
     },
     onSuccess: () => {
       setEditingId(null);
@@ -273,6 +254,10 @@ function GeneralChat() {
       qc.invalidateQueries({ queryKey: ["thread-messages", activeThreadId] });
     },
     onError: (e: Error) => toast.error(e.message),
+    onSettled: () => {
+      setStreamingMessage("");
+      setIsStreaming(false);
+    }
   });
 
   const send = useCallback(() => {
@@ -553,16 +538,12 @@ function GeneralChat() {
                       {/* Content */}
                       <div className="chat-assistant-accent min-w-0 flex-1 rounded-2xl rounded-tl-md border bg-card/80 px-5 py-4 shadow-sm backdrop-blur-sm">
                         <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-                          {m.id === typingMessageId ? (
-                            <TypewriterMarkdown content={m.content} />
-                          ) : (
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={markdownComponents}
-                            >
-                              {m.content}
-                            </ReactMarkdown>
-                          )}
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={markdownComponents}
+                          >
+                            {m.content}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     </div>
@@ -584,19 +565,29 @@ function GeneralChat() {
                 </div>
               )}
 
-              {/* ── Thinking indicator ── */}
-              {sendMessage.isPending && (
+              {/* ── Streaming or Thinking Assistant Message ── */}
+              {(sendMessage.isPending || editMessage.isPending) && (
                 <div className="chat-message-enter flex gap-3 py-3">
                   <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-gold/20">
                     <Bot className="h-3.5 w-3.5 text-primary" />
                   </div>
-                  <div className="flex items-center gap-3 rounded-2xl rounded-tl-md border bg-card/80 px-5 py-4 shadow-sm backdrop-blur-sm">
-                    <div className="chat-dot-pulse flex gap-1.5">
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                    <span className="chat-shimmer text-xs font-medium">Thinking</span>
+                  <div className="chat-assistant-accent min-w-0 flex-1 rounded-2xl rounded-tl-md border bg-card/80 px-5 py-4 shadow-sm backdrop-blur-sm">
+                    {streamingMessage ? (
+                      <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                          {streamingMessage}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="chat-dot-pulse flex gap-1.5">
+                          <span />
+                          <span />
+                          <span />
+                        </div>
+                        <span className="chat-shimmer text-xs font-medium">Thinking</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

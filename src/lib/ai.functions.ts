@@ -290,6 +290,95 @@ async function callDeepSeek(
   throw lastError ?? new Error("AI call failed after retries");
 }
 
+export async function* streamDeepSeek(
+  messages: Msg[],
+  temperature = 0.4
+): AsyncGenerator<string, void, unknown> {
+  const key = process.env.OPENROUTER_API_KEY || process.env.AGENT_ROUTER_TOKEN || process.env.DEEPSEEK_API_KEY;
+  if (!key) throw new Error("OPENROUTER_API_KEY is not configured in .env");
+
+  const model = process.env.AI_MODEL || "deepseek/deepseek-chat";
+  const maxContext = getModelContextLimit();
+  
+  const totalInputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+  if (totalInputTokens > maxContext * 0.8) {
+    const userMsgIdx = messages.findLastIndex(m => m.role === "user");
+    if (userMsgIdx >= 0) {
+      messages[userMsgIdx].content = sliceByTokens(messages[userMsgIdx].content, maxContext * 0.6);
+    }
+  }
+
+  const payload = JSON.stringify({ 
+    model, 
+    messages, 
+    temperature,
+    max_tokens: 4000,
+    top_p: 0.95,
+    frequency_penalty: 0.1,
+    presence_penalty: 0.1,
+    stream: true // Enable streaming
+  });
+
+  const res = await fetch(AI_CHAT_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": process.env.APP_URL || "http://localhost:5173",
+      "X-Title": "AI Study Assistant",
+    },
+    body: payload,
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`AI stream error ${res.status}: ${txt.slice(0, 300)}`);
+  }
+
+  if (!res.body) throw new Error("No response body");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let insideThinkTag = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ") || trimmed === "data: [DONE]") continue;
+      
+      try {
+        const data = JSON.parse(trimmed.slice(6));
+        const content = data.choices?.[0]?.delta?.content || "";
+        
+        // Basic reasoning tag strip for models that output <think> in stream
+        if (content.includes("<think>")) insideThinkTag = true;
+        if (content.includes("</think>")) {
+          insideThinkTag = false;
+          // Yield the part after </think> if any
+          const afterThink = content.split("</think>")[1];
+          if (afterThink) yield afterThink;
+          continue;
+        }
+        
+        if (!insideThinkTag && content) {
+          yield content;
+        }
+      } catch (e) {
+        console.warn("[AI Stream Parse Error]:", e, trimmed);
+      }
+    }
+  }
+}
+
 // ============================================================================
 // EXAM PATTERN RETRIEVAL (Enhanced)
 // ============================================================================
@@ -635,7 +724,7 @@ export const chatInExamSpace = createServerFn({ method: "POST" })
       question: z.string().min(1).max(2000),
     }).parse(d),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async function* ({ data, context }) {
     const { supabase, userId } = context;
     const maxContext = getModelContextLimit();
 
@@ -694,12 +783,15 @@ export const chatInExamSpace = createServerFn({ method: "POST" })
     // Persist user message immediately to ensure correct chronological ordering
     await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "user", content: data.question });
 
-    const answer = await callDeepSeek(messages, 0.4);
+    let fullAnswer = "";
+    const stream = streamDeepSeek(messages, 0.4);
+    for await (const chunk of stream) {
+      fullAnswer += chunk;
+      yield chunk;
+    }
 
     // Persist assistant message
-    await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "assistant", content: answer });
-
-    return { answer };
+    await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "assistant", content: fullAnswer });
   });
 
 // ============================================================================
@@ -714,7 +806,7 @@ export const chatInThread = createServerFn({ method: "POST" })
       question: z.string().min(1).max(2000),
     }).parse(d),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async function* ({ data, context }) {
     const { supabase, userId } = context;
 
     const { data: exams } = await supabase
@@ -748,12 +840,15 @@ export const chatInThread = createServerFn({ method: "POST" })
     // Persist user message immediately to ensure correct chronological ordering
     await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "user", content: data.question });
 
-    const answer = await callDeepSeek(messages, 0.4);
+    let fullAnswer = "";
+    const stream = streamDeepSeek(messages, 0.4);
+    for await (const chunk of stream) {
+      fullAnswer += chunk;
+      yield chunk;
+    }
 
     // Persist assistant message
-    await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "assistant", content: answer });
-
-    return { answer };
+    await supabase.from("chat_messages").insert({ user_id: userId, thread_id: data.threadId, role: "assistant", content: fullAnswer });
   });
 
 // ============================================================================
@@ -801,7 +896,7 @@ export const editAndResend = createServerFn({ method: "POST" })
       newContent: z.string().min(1).max(2000),
     }).parse(d),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async function* ({ data, context }) {
     const { supabase, userId } = context;
 
     const { data: msg } = await supabase
@@ -820,13 +915,19 @@ export const editAndResend = createServerFn({ method: "POST" })
 
     // Re-send with edited content
     if (data.examId) {
-      return chatInExamSpace({
+      const stream = await chatInExamSpace({
         data: { examId: data.examId, threadId: data.threadId, question: data.newContent },
       } as any);
+      for await (const chunk of stream) {
+        yield chunk;
+      }
     } else {
-      return chatInThread({
+      const stream = await chatInThread({
         data: { threadId: data.threadId, question: data.newContent },
       } as any);
+      for await (const chunk of stream) {
+        yield chunk;
+      }
     }
   });
 

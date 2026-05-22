@@ -44,38 +44,6 @@ type Message = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  Typewriter Component                                               */
-/* ------------------------------------------------------------------ */
-function TypewriterMarkdown({ content }: { content: string }) {
-  const [displayed, setDisplayed] = useState("");
-  const index = useRef(0);
-
-  useEffect(() => {
-    index.current = 0;
-    setDisplayed("");
-    
-    // Type out 15 characters every 20ms for a fast typing effect
-    const interval = setInterval(() => {
-      index.current += 15;
-      if (index.current >= content.length) {
-        setDisplayed(content);
-        clearInterval(interval);
-      } else {
-        setDisplayed(content.substring(0, index.current));
-      }
-    }, 20);
-
-    return () => clearInterval(interval);
-  }, [content]);
-
-  return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-      {displayed}
-    </ReactMarkdown>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Exam Chat Page                                                     */
 /* ------------------------------------------------------------------ */
 function ExamChatPage() {
@@ -91,13 +59,13 @@ function ExamChatPage() {
   const [editText, setEditText] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
-  const seenMessages = useRef<Set<string>>(new Set());
-  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
-  // Clear seen on thread switch
+  // Reset stream state on thread switch
   useEffect(() => {
-    seenMessages.current.clear();
-    setTypingMessageId(null);
+    setStreamingMessage("");
+    setIsStreaming(false);
   }, [activeThreadId]);
 
   // Fetch exam info
@@ -164,25 +132,8 @@ function ExamChatPage() {
   // Scroll to bottom on new messages
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streamingMessage]);
 
-  // Track new messages for typing effect
-  useEffect(() => {
-    if (messages.length > 0) {
-      let lastNewAssistantMsgId: string | null = null;
-      messages.forEach((m) => {
-        if (!seenMessages.current.has(m.id)) {
-          if (seenMessages.current.size > 0 && m.role === "assistant") {
-            lastNewAssistantMsgId = m.id;
-          }
-          seenMessages.current.add(m.id);
-        }
-      });
-      if (lastNewAssistantMsgId) {
-        setTypingMessageId(lastNewAssistantMsgId);
-      }
-    }
-  }, [messages]);
 
   // Create new thread
   const createThread = useMutation({
@@ -210,7 +161,19 @@ function ExamChatPage() {
   const sendMessage = useMutation({
     mutationFn: async (question: string) => {
       if (!activeThreadId) throw new Error("No thread selected");
-      return chatFn({ data: { examId, threadId: activeThreadId, question } });
+      setIsStreaming(true);
+      setStreamingMessage("");
+      try {
+        const stream = await chatFn({ data: { examId, threadId: activeThreadId, question } });
+        let currentResponse = "";
+        for await (const chunk of stream) {
+          currentResponse += chunk;
+          setStreamingMessage(currentResponse);
+        }
+        return currentResponse;
+      } finally {
+        setIsStreaming(false);
+      }
     },
     onSuccess: (_res, question) => {
       qc.invalidateQueries({ queryKey: ["thread-messages", activeThreadId] });
@@ -221,8 +184,13 @@ function ExamChatPage() {
           .then(() => qc.invalidateQueries({ queryKey: ["exam-threads", examId] }))
           .catch(() => {});
       }
+      setInput("");
     },
     onError: (e: Error) => toast.error(e.message),
+    onSettled: () => {
+      setStreamingMessage("");
+      setIsStreaming(false);
+    }
   });
 
   // Delete thread
@@ -241,13 +209,24 @@ function ExamChatPage() {
     },
   });
 
-  // Edit and resend
   const editMessage = useMutation({
     mutationFn: async ({ messageId, newContent }: { messageId: string; newContent: string }) => {
       if (!activeThreadId) throw new Error("No thread");
-      return editFn({
-        data: { messageId, threadId: activeThreadId, examId, newContent },
-      });
+      setIsStreaming(true);
+      setStreamingMessage("");
+      try {
+        const stream = await editFn({
+          data: { messageId, threadId: activeThreadId, examId, newContent },
+        });
+        let currentResponse = "";
+        for await (const chunk of stream) {
+          currentResponse += chunk;
+          setStreamingMessage(currentResponse);
+        }
+        return currentResponse;
+      } finally {
+        setIsStreaming(false);
+      }
     },
     onSuccess: () => {
       setEditingId(null);
@@ -255,6 +234,10 @@ function ExamChatPage() {
       qc.invalidateQueries({ queryKey: ["thread-messages", activeThreadId] });
     },
     onError: (e: Error) => toast.error(e.message),
+    onSettled: () => {
+      setStreamingMessage("");
+      setIsStreaming(false);
+    }
   });
 
   const send = useCallback(() => {
@@ -482,16 +465,9 @@ function ExamChatPage() {
                           <div className="whitespace-pre-wrap">{m.content}</div>
                         ) : (
                           <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-                            {m.id === typingMessageId ? (
-                              <TypewriterMarkdown content={m.content} />
-                            ) : (
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={markdownComponents}
-                              >
-                                {m.content}
-                              </ReactMarkdown>
-                            )}
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                              {m.content}
+                            </ReactMarkdown>
                           </div>
                         )}
                       </div>
@@ -521,10 +497,29 @@ function ExamChatPage() {
                   </div>
                 </div>
               )}
-              {sendMessage.isPending && (
-                <div className="flex justify-start">
-                  <div className="rounded-2xl border bg-card px-4 py-3 text-sm text-muted-foreground">
-                    <Loader2 className="inline h-3 w-3 animate-spin" /> Thinking...
+              {/* ── Streaming or Thinking Assistant Message ── */}
+              {(sendMessage.isPending || editMessage.isPending) && (
+                <div className="flex gap-3 py-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-gold/20">
+                    <Bot className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <div className="chat-assistant-accent min-w-0 flex-1 rounded-2xl rounded-tl-md border bg-card/80 px-5 py-4 shadow-sm backdrop-blur-sm">
+                    {streamingMessage ? (
+                      <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                          {streamingMessage}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="chat-dot-pulse flex gap-1.5">
+                          <span />
+                          <span />
+                          <span />
+                        </div>
+                        <span className="chat-shimmer text-xs font-medium">Thinking</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
