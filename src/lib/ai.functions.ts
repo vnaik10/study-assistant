@@ -50,12 +50,8 @@ function sliceByTokens(text: string, maxTokens: number, reserveOutput = 1500): s
 
 /** Get model-specific max context */
 function getModelContextLimit(): number {
-  const model = process.env.AI_MODEL || "deepseek/deepseek-chat";
-  if (model.includes("deepseek-chat") || model.includes("deepseek-coder")) return 64000;
-  if (model.includes("claude")) return 200000;
-  if (model.includes("gpt-4o")) return 128000;
-  if (model.includes("gemini")) return 1000000;
-  return 32000;
+  // Hard cap to 8000 tokens to avoid OpenRouter 402 errors due to insufficient credits
+  return 8000;
 }
 
 /**
