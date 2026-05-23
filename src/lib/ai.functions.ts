@@ -414,6 +414,16 @@ async function callAI(
             throw new Error("Your AI credits are too low. Please visit OpenRouter to upgrade.");
           }
         }
+        const promptMatch = txt.match(/Prompt tokens limit exceeded/i);
+        if (promptMatch) {
+          throw new Error("Your AI credits are too low to process this much text. Please use shorter text or upgrade your OpenRouter account.");
+        }
+        try {
+          const parsed = JSON.parse(txt);
+          if (parsed.error && parsed.error.message) {
+            throw new Error(`AI error: ${parsed.error.message}`);
+          }
+        } catch (e) {}
         throw new Error(`AI error 402 (Payment Required): ${txt.slice(0, 300)}`);
       }
       if (res.status === 429) {
@@ -541,6 +551,16 @@ export async function* streamAI(
           throw new Error("Your AI credits are too low. Please visit OpenRouter to upgrade.");
         }
       }
+      const promptMatch = txt.match(/Prompt tokens limit exceeded/i);
+      if (promptMatch) {
+        throw new Error("Your AI credits are too low to process this much text. Please use shorter text or upgrade your OpenRouter account.");
+      }
+      try {
+        const parsed = JSON.parse(txt);
+        if (parsed.error && parsed.error.message) {
+          throw new Error(`AI error: ${parsed.error.message}`);
+        }
+      } catch (e) {}
       throw new Error(`AI error 402 (Payment Required): ${txt.slice(0, 300)}`);
     }
 
