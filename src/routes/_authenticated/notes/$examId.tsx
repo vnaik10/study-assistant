@@ -8,10 +8,15 @@ import {
   FolderPlus, FilePlus, Folder, FileText, ArrowLeft,
   Trash2, Save, Eye, Edit3, Sparkles, Loader2,
   Check, Copy, Code2, CheckCircle2, AlertCircle,
-  Type, BookOpen,
+  Type, BookOpen, ImagePlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Image from "@tiptap/extension-image";
+import ResizeImage from "tiptap-extension-resize-image";
+import { Markdown } from "tiptap-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { formatNoteWithAI } from "@/lib/ai.functions";
@@ -247,6 +252,96 @@ function NotesWorkspace() {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedContent = useRef<string>("");
 
+  const handleContentChange = useCallback(
+    (newContent: string) => {
+      setEditorContent(newContent);
+
+      if (newContent !== lastSavedContent.current) {
+        setSaveStatus("unsaved");
+      }
+
+      // Clear existing timer
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+
+      // Set new timer
+      if (activeNoteId && newContent !== lastSavedContent.current) {
+        debounceTimer.current = setTimeout(() => {
+          setSaveStatus("saving");
+          saveNote.mutate({ id: activeNoteId, content: newContent });
+        }, 1500);
+      }
+    },
+    [activeNoteId, /* saveNote will be hoisted implicitly by React */],
+  );
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Image,
+      ResizeImage,
+      Markdown.configure({
+        html: true,
+        tightLists: true,
+        tightListClass: 'tight',
+        bulletListMarker: '-',
+        linkify: true,
+        breaks: true,
+      }),
+    ],
+    content: editorContent,
+    onUpdate: ({ editor }) => {
+      const md = editor.storage.markdown.getMarkdown();
+      handleContentChange(md);
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm md:prose-base dark:prose-invert max-w-none focus:outline-none w-full min-h-[500px]',
+      },
+      handleDOMEvents: {
+        keydown: (_view, event) => {
+          if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+            event.preventDefault();
+            manualSave();
+            return true;
+          }
+          return false;
+        },
+      },
+    },
+  });
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !examId) return;
+
+    try {
+      toast.loading("Uploading image...", { id: "upload-image" });
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const filePath = `${user.id}/${examId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('note_images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('note_images')
+        .getPublicUrl(filePath);
+
+      editor?.chain().focus().setImage({ src: publicUrl }).run();
+      toast.success("Image attached!", { id: "upload-image" });
+    } catch (error: any) {
+      toast.error(`Upload failed: ${error.message}`, { id: "upload-image" });
+    }
+    
+    // Reset file input
+    e.target.value = '';
+  };
+
   // Fetch Exam
   const { data: exam } = useQuery({
     queryKey: ["exam", examId],
@@ -287,13 +382,22 @@ function NotesWorkspace() {
         setEditorContent(note.content || "");
         lastSavedContent.current = note.content || "";
         setSaveStatus("saved");
+        if (editor) {
+          const currentMd = editor.storage.markdown.getMarkdown();
+          if (note.content !== currentMd) {
+            editor.commands.setContent(note.content || "");
+          }
+        }
       }
     } else {
       setEditorContent("");
       lastSavedContent.current = "";
       setSaveStatus("idle");
+      if (editor) {
+        editor.commands.setContent("");
+      }
     }
-  }, [activeNoteId, notes]);
+  }, [activeNoteId, notes, editor]);
 
   // Mutations
   const createFolder = useMutation({
@@ -405,6 +509,9 @@ function NotesWorkspace() {
         setEditorContent(result.formatted);
         lastSavedContent.current = result.formatted;
         setSaveStatus("saved");
+        if (editor) {
+          editor.commands.setContent(result.formatted);
+        }
       }
       qc.invalidateQueries({ queryKey: ["notes", examId] });
       toast.success("Notes formatted by AI!");
@@ -412,30 +519,7 @@ function NotesWorkspace() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Auto-save with debounce
-  const handleContentChange = useCallback(
-    (newContent: string) => {
-      setEditorContent(newContent);
-
-      if (newContent !== lastSavedContent.current) {
-        setSaveStatus("unsaved");
-      }
-
-      // Clear existing timer
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-
-      // Set new timer
-      if (activeNoteId && newContent !== lastSavedContent.current) {
-        debounceTimer.current = setTimeout(() => {
-          setSaveStatus("saving");
-          saveNote.mutate({ id: activeNoteId, content: newContent });
-        }, 1500);
-      }
-    },
-    [activeNoteId, saveNote],
-  );
+  // useCallback moved to top
 
   // Manual save
   const manualSave = useCallback(() => {
@@ -648,6 +732,27 @@ function NotesWorkspace() {
                   <Type className="h-3 w-3" /> {wordCount} words
                 </span>
 
+                {/* Image Upload */}
+                {!isPreview && (
+                  <>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      id="image-upload" 
+                      onChange={handleImageUpload} 
+                    />
+                    <label 
+                      htmlFor="image-upload" 
+                      className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3 gap-1.5 cursor-pointer"
+                      title="Attach Image"
+                    >
+                      <ImagePlus className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Image</span>
+                    </label>
+                  </>
+                )}
+
                 {/* AI Format button */}
                 <Button
                   onClick={() => activeNoteId && aiFormat.mutate(activeNoteId)}
@@ -684,19 +789,7 @@ function NotesWorkspace() {
                 /* ── Write Mode ── */
                 <div className="w-full h-full overflow-y-auto bg-background p-8">
                   <div className="mx-auto max-w-3xl h-full">
-                    <textarea
-                      value={editorContent}
-                      onChange={(e) => handleContentChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                          e.preventDefault();
-                          manualSave();
-                        }
-                      }}
-                      className="w-full h-full resize-none bg-transparent font-sans text-[17px] leading-relaxed outline-none focus:ring-0 focus:outline-none placeholder:text-muted-foreground/40"
-                      placeholder="Start typing your notes here...&#10;&#10;💡 Tip: Write freely, then click 'Format with AI' to structure your notes beautifully.&#10;&#10;Supports Markdown: # Heading, **bold**, - bullets, etc."
-                      spellCheck="false"
-                    />
+                    <EditorContent editor={editor} />
                   </div>
                 </div>
               ) : (
