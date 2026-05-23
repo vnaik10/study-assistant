@@ -365,23 +365,24 @@ async function callAI(
     }
   }
 
-  const payload = JSON.stringify({
-    model,
-    messages,
-    temperature,
-    max_tokens: 1500,
-    top_p: 0.95,
-    frequency_penalty: 0.15,
-    presence_penalty: 0.1,
-  });
-
   let lastError: Error | null = null;
   let attempt = 0;
+  let currentMaxTokens = 1500;
 
   while (attempt < 3) {
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
     }
+
+    const payload = JSON.stringify({
+      model,
+      messages,
+      temperature,
+      max_tokens: currentMaxTokens,
+      top_p: 0.95,
+      frequency_penalty: 0.15,
+      presence_penalty: 0.1,
+    });
 
     try {
       const res = await fetch(AI_CHAT_ENDPOINT, {
@@ -398,6 +399,22 @@ async function callAI(
       if (res.status === 401) {
         const txt = await res.text();
         throw new Error(`AI authentication failed (401). Check your OPENROUTER_API_KEY. Response: ${txt.slice(0, 300)}`);
+      }
+      if (res.status === 402) {
+        const txt = await res.text();
+        const match = txt.match(/can only afford (\d+)/);
+        if (match && match[1]) {
+          const affordable = parseInt(match[1], 10);
+          if (affordable > 50) {
+            currentMaxTokens = affordable;
+            lastError = new Error(`AI error 402: Adjusting max_tokens to ${affordable}`);
+            attempt++;
+            continue;
+          } else {
+            throw new Error("Your AI credits are too low. Please visit OpenRouter to upgrade.");
+          }
+        }
+        throw new Error(`AI error 402 (Payment Required): ${txt.slice(0, 300)}`);
       }
       if (res.status === 429) {
         lastError = new Error("Rate limited by AI provider");
@@ -480,31 +497,68 @@ export async function* streamAI(
     }
   }
 
-  const payload = JSON.stringify({
-    model,
-    messages,
-    temperature,
-    max_tokens: 1500,
-    top_p: 0.95,
-    frequency_penalty: 0.15,
-    presence_penalty: 0.1,
-    stream: true,
-  });
+  let attempt = 0;
+  let currentMaxTokens = 1500;
+  let res: Response | null = null;
 
-  const res = await fetch(AI_CHAT_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${key}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.APP_URL || "http://localhost:5173",
-      "X-Title": "AI Study Assistant",
-    },
-    body: payload,
-  });
+  while (attempt < 3) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+    }
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`AI stream error ${res.status}: ${txt.slice(0, 300)}`);
+    const payload = JSON.stringify({
+      model,
+      messages,
+      temperature,
+      max_tokens: currentMaxTokens,
+      top_p: 0.95,
+      frequency_penalty: 0.15,
+      presence_penalty: 0.1,
+      stream: true,
+    });
+
+    res = await fetch(AI_CHAT_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.APP_URL || "http://localhost:5173",
+        "X-Title": "AI Study Assistant",
+      },
+      body: payload,
+    });
+
+    if (res.status === 402) {
+      const txt = await res.text();
+      const match = txt.match(/can only afford (\d+)/);
+      if (match && match[1]) {
+        const affordable = parseInt(match[1], 10);
+        if (affordable > 50) {
+          currentMaxTokens = affordable;
+          attempt++;
+          continue;
+        } else {
+          throw new Error("Your AI credits are too low. Please visit OpenRouter to upgrade.");
+        }
+      }
+      throw new Error(`AI error 402 (Payment Required): ${txt.slice(0, 300)}`);
+    }
+
+    if (res.status === 429) {
+      attempt++;
+      continue;
+    }
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`AI stream error ${res.status}: ${txt.slice(0, 300)}`);
+    }
+
+    break;
+  }
+
+  if (!res || !res.ok) {
+    throw new Error("Failed to fetch from AI stream after retries.");
   }
   if (!res.body) throw new Error("No response body");
 
