@@ -282,6 +282,8 @@ function NotesWorkspace() {
         bulletListMarker: '-',
         linkify: true,
         breaks: true,
+        transformPastedText: true,
+        transformCopiedText: true,
       }),
     ],
     content: editorContent,
