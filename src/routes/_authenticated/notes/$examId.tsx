@@ -132,29 +132,20 @@ const previewMarkdownComponents = {
   ),
 
   ul: ({ children, ...props }: any) => (
-    <ul className="mb-4 ml-1 space-y-2 last:mb-0" {...props}>
+    <ul className="mb-4 ml-5 list-disc space-y-2 marker:text-primary/70 last:mb-0" {...props}>
       {children}
     </ul>
   ),
   ol: ({ children, ...props }: any) => (
-    <ol className="mb-4 ml-1 list-decimal space-y-2 pl-5 last:mb-0 marker:text-primary/60 marker:font-bold" {...props}>
+    <ol className="mb-4 ml-5 list-decimal space-y-2 marker:font-bold marker:text-primary/60 last:mb-0" {...props}>
       {children}
     </ol>
   ),
-  li: ({ children, ...props }: any) => {
-    const isOrdered = props.node?.parentNode?.tagName === "ol";
-    return (
-      <li
-        className={`text-[0.9375rem] leading-[1.7] ${!isOrdered ? "flex items-start gap-2.5" : ""}`}
-        {...props}
-      >
-        {!isOrdered && (
-          <span className="mt-[0.55rem] block h-2 w-2 shrink-0 rounded-full bg-gradient-to-br from-primary/70 to-gold/70" />
-        )}
-        <span className="flex-1">{children}</span>
-      </li>
-    );
-  },
+  li: ({ children, ...props }: any) => (
+    <li className="text-[0.9375rem] leading-[1.7] pl-1" {...props}>
+      {children}
+    </li>
+  ),
 
   blockquote: ({ children, ...props }: any) => (
     <blockquote
@@ -292,7 +283,7 @@ function NotesWorkspace() {
     ],
     content: editorContent,
     onUpdate: ({ editor }) => {
-      const md = editor.storage.markdown.getMarkdown();
+      const md = (editor.storage as any).markdown.getMarkdown();
       handleContentChange(md);
     },
     editorProps: {
@@ -383,7 +374,7 @@ function NotesWorkspace() {
         lastSavedContent.current = note.content || "";
         setSaveStatus("saved");
         if (editor) {
-          const currentMd = editor.storage.markdown.getMarkdown();
+          const currentMd = (editor.storage as any).markdown.getMarkdown();
           if (note.content !== currentMd) {
             editor.commands.setContent(note.content || "");
           }
