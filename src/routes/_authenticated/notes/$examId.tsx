@@ -132,17 +132,20 @@ const previewMarkdownComponents = {
   ),
 
   ul: ({ children, ...props }: any) => (
-    <ul className="mb-4 ml-5 list-disc space-y-2 marker:text-primary/70 last:mb-0" {...props}>
+    <ul 
+      className="mb-4 ml-1 space-y-2 last:mb-0 list-none [&>li]:relative [&>li]:pl-6 [&>li]:before:absolute [&>li]:before:left-1 [&>li]:before:top-[0.55rem] [&>li]:before:h-2 [&>li]:before:w-2 [&>li]:before:shrink-0 [&>li]:before:rounded-full [&>li]:before:bg-gradient-to-br [&>li]:before:from-primary/70 [&>li]:before:to-gold/70" 
+      {...props}
+    >
       {children}
     </ul>
   ),
   ol: ({ children, ...props }: any) => (
-    <ol className="mb-4 ml-5 list-decimal space-y-2 marker:font-bold marker:text-primary/60 last:mb-0" {...props}>
+    <ol className="mb-4 ml-1 list-decimal space-y-2 pl-5 last:mb-0 marker:text-primary/60 marker:font-bold" {...props}>
       {children}
     </ol>
   ),
-  li: ({ children, ...props }: any) => (
-    <li className="text-[0.9375rem] leading-[1.7] pl-1" {...props}>
+  li: ({ className, children, ...props }: any) => (
+    <li className={`text-[0.9375rem] leading-[1.7] ${className || ""}`} {...props}>
       {children}
     </li>
   ),
