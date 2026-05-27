@@ -792,41 +792,39 @@ function NotesWorkspace() {
 
             {/* ── Editor / Preview Body ── */}
             <div className="flex-1 overflow-hidden relative">
-              {!isPreview ? (
-                /* ── Write Mode ── */
-                <div className="w-full h-full overflow-y-auto bg-background p-8">
-                  <div className="mx-auto max-w-3xl h-full">
-                    <EditorContent editor={editor} />
-                  </div>
+              {/* ── Write Mode ── */}
+              <div className={`w-full h-full overflow-y-auto bg-background p-8 ${isPreview ? 'hidden' : 'block'}`}>
+                <div className="mx-auto max-w-3xl h-full">
+                  <EditorContent editor={editor} />
                 </div>
-              ) : (
-                /* ── Preview Mode — Premium Rendering ── */
-                <div className="w-full h-full overflow-y-auto p-8 bg-gradient-to-b from-card/30 to-background">
-                  <div className="mx-auto max-w-3xl">
-                    {editorContent.trim() ? (
-                      <article className="rounded-2xl border bg-card/80 p-8 shadow-sm backdrop-blur-sm md:p-10">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
-                          components={previewMarkdownComponents}
-                        >
-                          {editorContent}
-                        </ReactMarkdown>
-                      </article>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
-                          <Eye className="h-7 w-7 text-muted-foreground/40" />
-                        </div>
-                        <h3 className="font-display text-lg font-semibold text-muted-foreground">Nothing to preview</h3>
-                        <p className="mt-1 text-sm text-muted-foreground/60">
-                          Switch to Write mode and add some content first.
-                        </p>
+              </div>
+
+              {/* ── Preview Mode — Premium Rendering ── */}
+              <div className={`w-full h-full overflow-y-auto p-8 bg-gradient-to-b from-card/30 to-background ${!isPreview ? 'hidden' : 'block'}`}>
+                <div className="mx-auto max-w-3xl">
+                  {editorContent.trim() ? (
+                    <article className="rounded-2xl border bg-card/80 p-8 shadow-sm backdrop-blur-sm md:p-10">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
+                        components={previewMarkdownComponents}
+                      >
+                        {editorContent}
+                      </ReactMarkdown>
+                    </article>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
+                        <Eye className="h-7 w-7 text-muted-foreground/40" />
                       </div>
-                    )}
-                  </div>
+                      <h3 className="font-display text-lg font-semibold text-muted-foreground">Nothing to preview</h3>
+                      <p className="mt-1 text-sm text-muted-foreground/60">
+                        Switch to Write mode and add some content first.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* ── Status Bar ── */}
