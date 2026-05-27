@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Sparkles, BookOpen, Calendar, MessageSquare, Brain, FileText } from "lucide-react";
+import { Sparkles, BookOpen, Calendar, MessageSquare, Brain, FileText, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/hooks/use-theme";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -27,6 +28,8 @@ function Feature({
 }
 
 function Landing() {
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
@@ -39,6 +42,16 @@ function Landing() {
             <span className="font-display text-xl font-semibold">Scholaria</span>
           </Link>
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <div className="relative h-4 w-4">
+                <Sun className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}`} />
+                <Moon className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'light' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}`} />
+              </div>
+            </button>
             <Link to="/login">
               <Button variant="ghost">Sign in</Button>
             </Link>

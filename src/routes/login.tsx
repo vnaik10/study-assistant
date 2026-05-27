@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Eye, EyeOff, Moon, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useTheme } from "@/hooks/use-theme";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -21,6 +22,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     // Check if recovery link was clicked (indicated by hash fragment containing type=recovery)
@@ -135,7 +137,18 @@ function LoginPage() {
         <div className="text-xs text-sidebar-foreground/60">© Scholaria</div>
       </div>
 
-      <div className="flex items-center justify-center p-8">
+      <div className="flex items-center justify-center p-8 relative">
+        {/* Theme toggle — top right of form panel */}
+        <button
+          onClick={toggleTheme}
+          className="absolute top-6 right-6 flex h-9 w-9 items-center justify-center rounded-lg border bg-card text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shadow-sm"
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          <div className="relative h-4 w-4">
+            <Sun className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}`} />
+            <Moon className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'light' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}`} />
+          </div>
+        </button>
         <form onSubmit={submit} className="w-full max-w-sm space-y-5">
           <div>
             <h1 className="font-display text-3xl font-semibold">

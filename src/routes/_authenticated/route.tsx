@@ -7,9 +7,10 @@ import {
   useLocation,
 } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Calendar, FileText, MessageSquare, LogOut, Sparkles, Notebook } from "lucide-react";
+import { LayoutDashboard, Calendar, FileText, MessageSquare, LogOut, Sparkles, Notebook, Moon, Sun } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
@@ -31,6 +32,7 @@ function AuthedLayout() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -66,8 +68,19 @@ function AuthedLayout() {
             );
           })}
         </nav>
-        <div className="border-t border-sidebar-border pt-4">
+        <div className="border-t border-sidebar-border pt-4 space-y-1">
           <div className="mb-2 truncate text-xs text-sidebar-foreground/60">{user?.email}</div>
+          <button
+            onClick={toggleTheme}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent/50 transition-colors"
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            <div className="relative h-4 w-4">
+              <Sun className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}`} />
+              <Moon className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'light' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}`} />
+            </div>
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </button>
           <button
             onClick={signOut}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
@@ -84,9 +97,21 @@ function AuthedLayout() {
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="font-display font-semibold">Scholaria</span>
           </Link>
-          <button onClick={signOut} className="text-sm text-muted-foreground">
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <div className="relative h-4 w-4">
+                <Sun className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}`} />
+                <Moon className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'light' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}`} />
+              </div>
+            </button>
+            <button onClick={signOut} className="text-sm text-muted-foreground">
+              Sign out
+            </button>
+          </div>
         </header>
         <nav className="flex gap-1 overflow-x-auto border-b bg-card px-2 py-2 md:hidden">
           {NAV.map(({ to, label, icon: Icon }) => (
