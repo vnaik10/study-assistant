@@ -71,17 +71,6 @@ function AuthedLayout() {
         <div className="border-t border-sidebar-border pt-4 space-y-1">
           <div className="mb-2 truncate text-xs text-sidebar-foreground/60">{user?.email}</div>
           <button
-            onClick={toggleTheme}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent/50 transition-colors"
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            <div className="relative h-4 w-4">
-              <Sun className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}`} />
-              <Moon className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'light' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}`} />
-            </div>
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          </button>
-          <button
             onClick={signOut}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
           >
@@ -124,7 +113,20 @@ function AuthedLayout() {
             </Link>
           ))}
         </nav>
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto relative">
+          {/* Desktop theme toggle — top right of main content */}
+          <div className="hidden md:flex sticky top-0 z-20 justify-end px-6 py-3">
+            <button
+              onClick={toggleTheme}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border bg-card text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 shadow-sm hover:shadow-md"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <div className="relative h-4 w-4">
+                <Sun className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}`} />
+                <Moon className={`h-4 w-4 absolute inset-0 transition-all duration-300 ${theme === 'light' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}`} />
+              </div>
+            </button>
+          </div>
           <Outlet />
         </main>
       </div>
