@@ -19,6 +19,7 @@ import ResizeImage from "tiptap-extension-resize-image";
 import { Markdown } from "tiptap-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { formatNoteWithAI } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/_authenticated/notes/$examId")({
@@ -217,6 +218,16 @@ const previewMarkdownComponents = {
 
   pre: ({ children, ...props }: any) => (
     <div {...props}>{children}</div>
+  ),
+
+  img: ({ src, alt, ...props }: any) => (
+    <img
+      src={src}
+      alt={alt || ""}
+      className="my-4 max-w-full rounded-xl border shadow-sm"
+      loading="lazy"
+      {...props}
+    />
   ),
 };
 
@@ -796,6 +807,7 @@ function NotesWorkspace() {
                       <article className="rounded-2xl border bg-card/80 p-8 shadow-sm backdrop-blur-sm md:p-10">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeRaw]}
                           components={previewMarkdownComponents}
                         >
                           {editorContent}
