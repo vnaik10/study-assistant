@@ -20,7 +20,17 @@ import { Markdown } from "tiptap-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { formatNoteWithAI } from "@/lib/ai.functions";
+
+const preprocessMath = (content: string) => {
+  if (!content) return "";
+  return content
+    .replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$') // Convert \[ ... \] to $$ ... $$
+    .replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');     // Convert \( ... \) to $ ... $
+};
 
 export const Route = createFileRoute("/_authenticated/notes/$examId")({
   component: NotesWorkspace,
@@ -804,13 +814,13 @@ function NotesWorkspace() {
                 <div className="mx-auto max-w-3xl">
                   {editorContent.trim() ? (
                     <article className="rounded-2xl border bg-card/80 p-8 shadow-sm backdrop-blur-sm md:p-10">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeRaw]}
-                        components={previewMarkdownComponents}
-                      >
-                        {editorContent}
-                      </ReactMarkdown>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeRaw, rehypeKatex]}
+                          components={previewMarkdownComponents}
+                        >
+                          {preprocessMath(editorContent)}
+                        </ReactMarkdown>
                     </article>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
