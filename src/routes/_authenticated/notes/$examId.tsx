@@ -25,33 +25,61 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { formatNoteWithAI } from "@/lib/ai.functions";
 
-const unescapeMath = (math: string) => {
-  let cleaned = math
-    .replace(/\\\\/g, '\\') // Unescape backslashes
-    .replace(/\\_/g, '_')   // Unescape underscores
-    .replace(/\\\*/g, '*')  // Unescape asterisks
-    .replace(/\\\{/g, '{')  // Unescape left brace
-    .replace(/\\\}/g, '}')  // Unescape right brace
-    .replace(/\\\[/g, '[')  // Unescape left bracket
-    .replace(/\\\]/g, ']')  // Unescape right bracket
-    .replace(/\\\^/g, '^'); // Unescape caret
-
-  // Aggressively fix \\frac or similar double-escaped LaTeX commands
-  cleaned = cleaned.replace(/\\\\([a-zA-Z])/g, '\\$1');
-  
-  // Fix KaTeX "Expected EOF, got \" error caused by Tiptap hard breaks
-  cleaned = cleaned.replace(/\\\s*$/g, '');
-  
-  return cleaned;
-};
-
+/**
+ * preprocessMath — prepare markdown content for remark-math / rehype-katex.
+ *
+ * Problem: Tiptap's Markdown serializer aggressively escapes special chars:
+ *   $  → \$     \  → \\    {  → \{    }  → \}    [  → \[    ]  → \]
+ *
+ * So the user writes:  $\frac{1}{2}$
+ * Tiptap stores it as: \$\\frac\{1\}\{2\}\$
+ *
+ * We need to undo this escaping so remark-math can find the $ delimiters
+ * and KaTeX can parse the LaTeX commands inside them.
+ */
 const preprocessMath = (content: string) => {
   if (!content) return "";
-  return content
-    // Safely unescape existing $$ ... $$ blocks
-    .replace(/\$\$([\s\S]*?)\$\$/g, (_, p1) => `$$${unescapeMath(p1)}$$`)
-    // Safely unescape existing $ ... $ blocks
-    .replace(/(?<!\$)\$([^\$]+?)\$(?!\$)/g, (_, p1) => `$${unescapeMath(p1)}$`);
+
+  // Step 1: Undo Tiptap's escaping of dollar signs so remark-math can find them.
+  // \$ → $  (but \\$ stays as \$ which is an escaped dollar inside math)
+  let result = content.replace(/\\\$/g, '$');
+
+  // Step 2: Convert \\[...\\] → $$...$$ and \\(...\\) → $...$ (AI output format)
+  result = result
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_, p1) => `$$${p1}$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, p1) => `$${p1}$`);
+
+  // Step 3: Inside $$ ... $$ blocks, unescape LaTeX chars that Tiptap escaped
+  result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
+    const cleaned = math
+      .replace(/\\\\/g, '\\')   // \\\\ → \\ (unescape backslash)
+      .replace(/\\\{/g, '{')    // \{ → {
+      .replace(/\\\}/g, '}')    // \} → }
+      .replace(/\\_/g, '_')      // \_ → _
+      .replace(/\\\^/g, '^')    // \^ → ^
+      .replace(/\\\[/g, '[')    // \[ → [
+      .replace(/\\\]/g, ']')    // \] → ]
+      .replace(/\\\*/g, '*')    // \* → *
+      .replace(/\\\s*$/gm, ''); // trailing \ → remove (KaTeX EOF fix)
+    return `$$${cleaned}$$`;
+  });
+
+  // Step 4: Inside $ ... $ inline blocks, same cleanup
+  result = result.replace(/(?<!\$)\$(?!\$)([^\$]+?)\$(?!\$)/g, (_, math) => {
+    const cleaned = math
+      .replace(/\\\\/g, '\\')
+      .replace(/\\\{/g, '{')
+      .replace(/\\\}/g, '}')
+      .replace(/\\_/g, '_')
+      .replace(/\\\^/g, '^')
+      .replace(/\\\[/g, '[')
+      .replace(/\\\]/g, ']')
+      .replace(/\\\*/g, '*')
+      .replace(/\\\s*$/gm, '');
+    return `$${cleaned}$`;
+  });
+
+  return result;
 };
 
 export const Route = createFileRoute("/_authenticated/notes/$examId")({
@@ -413,8 +441,16 @@ function NotesWorkspace() {
     }
   });
 
-  // Load content when note changes
+  // Load content ONLY when the active note ID changes (user selects a different note).
+  // We intentionally do NOT depend on `notes` here — that was causing a cycle:
+  //   edit → autosave → invalidate notes query → notes refetches → useEffect fires
+  //   → editor.setContent resets editor → editor state breaks → buttons freeze.
+  const prevNoteIdRef = useRef<string | null>(null);
   useEffect(() => {
+    // Only run when the user actually switches to a different note
+    if (activeNoteId === prevNoteIdRef.current) return;
+    prevNoteIdRef.current = activeNoteId;
+
     if (activeNoteId) {
       const note = notes.find((n) => n.id === activeNoteId);
       if (note) {
@@ -422,10 +458,7 @@ function NotesWorkspace() {
         lastSavedContent.current = note.content || "";
         setSaveStatus("saved");
         if (editor) {
-          const currentMd = (editor.storage as any).markdown.getMarkdown();
-          if (note.content !== currentMd) {
-            editor.commands.setContent(note.content || "");
-          }
+          editor.commands.setContent(note.content || "");
         }
       }
     } else {
@@ -436,7 +469,8 @@ function NotesWorkspace() {
         editor.commands.setContent("");
       }
     }
-  }, [activeNoteId, notes, editor]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNoteId, editor]);
 
   // Mutations
   const createFolder = useMutation({
@@ -498,9 +532,13 @@ function NotesWorkspace() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      lastSavedContent.current = editorContent;
+    onSuccess: (_data, variables) => {
+      lastSavedContent.current = variables.content;
       setSaveStatus("saved");
+      // NOTE: We intentionally do NOT invalidate the notes query here.
+      // Doing so caused a vicious cycle: save → refetch notes → useEffect
+      // resets editor → editor breaks → Write/Preview buttons freeze.
+      // The sidebar title is updated below via a targeted invalidation.
       qc.invalidateQueries({ queryKey: ["notes", examId] });
     },
     onError: (e: Error) => {
