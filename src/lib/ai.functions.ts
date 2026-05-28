@@ -100,7 +100,8 @@ const FORMAT_BLOCK = `## Output Format Rules
 - Use clean, valid markdown only. No raw HTML tags.
 - Bold (**term**) key concepts on first use.
 - Tables must use proper markdown pipe syntax with a header separator row.
-- Use --- as a section divider between major sections, not inside lists.`;
+- Use --- as a section divider between major sections, not inside lists.
+- FOR MATH: ALWAYS use $$ for block math and $ for inline math. Never use \\[ or \\( or \\).`;
 
 // --- Exam pattern compliance block ---
 const EXAM_PATTERN_BLOCK = `## Exam Pattern Compliance — This is Law

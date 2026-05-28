@@ -48,13 +48,9 @@ const unescapeMath = (math: string) => {
 const preprocessMath = (content: string) => {
   if (!content) return "";
   return content
-    // Convert \[ ... \] to $$ ... $$ and unescape
-    .replace(/\\\[([\s\S]*?)\\\]/g, (_, p1) => `$$${unescapeMath(p1)}$$`)
-    // Convert \( ... \) to $ ... $ and unescape
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, p1) => `$${unescapeMath(p1)}$`)
-    // Unescape existing $$ ... $$ blocks
+    // Safely unescape existing $$ ... $$ blocks
     .replace(/\$\$([\s\S]*?)\$\$/g, (_, p1) => `$$${unescapeMath(p1)}$$`)
-    // Unescape existing $ ... $ blocks
+    // Safely unescape existing $ ... $ blocks
     .replace(/(?<!\$)\$([^\$]+?)\$(?!\$)/g, (_, p1) => `$${unescapeMath(p1)}$`);
 };
 
