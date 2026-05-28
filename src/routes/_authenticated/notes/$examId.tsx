@@ -26,7 +26,7 @@ import "katex/dist/katex.min.css";
 import { formatNoteWithAI } from "@/lib/ai.functions";
 
 const unescapeMath = (math: string) => {
-  return math
+  let cleaned = math
     .replace(/\\\\/g, '\\') // Unescape backslashes
     .replace(/\\_/g, '_')   // Unescape underscores
     .replace(/\\\*/g, '*')  // Unescape asterisks
@@ -35,6 +35,14 @@ const unescapeMath = (math: string) => {
     .replace(/\\\[/g, '[')  // Unescape left bracket
     .replace(/\\\]/g, ']')  // Unescape right bracket
     .replace(/\\\^/g, '^'); // Unescape caret
+
+  // Aggressively fix \\frac or similar double-escaped LaTeX commands
+  cleaned = cleaned.replace(/\\\\([a-zA-Z])/g, '\\$1');
+  
+  // Fix KaTeX "Expected EOF, got \" error caused by Tiptap hard breaks
+  cleaned = cleaned.replace(/\\\s*$/g, '');
+  
+  return cleaned;
 };
 
 const preprocessMath = (content: string) => {
