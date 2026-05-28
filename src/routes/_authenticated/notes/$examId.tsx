@@ -25,11 +25,29 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { formatNoteWithAI } from "@/lib/ai.functions";
 
+const unescapeMath = (math: string) => {
+  return math
+    .replace(/\\\\/g, '\\') // Unescape backslashes
+    .replace(/\\_/g, '_')   // Unescape underscores
+    .replace(/\\\*/g, '*')  // Unescape asterisks
+    .replace(/\\\{/g, '{')  // Unescape left brace
+    .replace(/\\\}/g, '}')  // Unescape right brace
+    .replace(/\\\[/g, '[')  // Unescape left bracket
+    .replace(/\\\]/g, ']')  // Unescape right bracket
+    .replace(/\\\^/g, '^'); // Unescape caret
+};
+
 const preprocessMath = (content: string) => {
   if (!content) return "";
   return content
-    .replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$') // Convert \[ ... \] to $$ ... $$
-    .replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');     // Convert \( ... \) to $ ... $
+    // Convert \[ ... \] to $$ ... $$ and unescape
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_, p1) => `$$${unescapeMath(p1)}$$`)
+    // Convert \( ... \) to $ ... $ and unescape
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, p1) => `$${unescapeMath(p1)}$`)
+    // Unescape existing $$ ... $$ blocks
+    .replace(/\$\$([\s\S]*?)\$\$/g, (_, p1) => `$$${unescapeMath(p1)}$$`)
+    // Unescape existing $ ... $ blocks
+    .replace(/(?<!\$)\$([^\$]+?)\$(?!\$)/g, (_, p1) => `$${unescapeMath(p1)}$`);
 };
 
 export const Route = createFileRoute("/_authenticated/notes/$examId")({
